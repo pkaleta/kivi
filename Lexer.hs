@@ -8,8 +8,8 @@ type TokenInfo = (Int, Token)
 twoCharOps = ["==", "~=", ">=", "<=", "->"]
 
 -- lexer implementation
-clex :: String -> [TokenInfo]
-clex s = clex' s 1
+clex :: String -> [Token]
+clex s = map snd $ clex' s 1
 
 clex' :: String -> Int -> [TokenInfo]
 clex' [] _ = []

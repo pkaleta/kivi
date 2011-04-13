@@ -42,15 +42,15 @@ rhsOf defns = [rhs | (_, rhs) <- defns]
 keywords = ["let", "letrec", "case", "in", "of", "Pack"]
 
 --parser implementation
---parse :: String -> CoreProgram
---parse = syntax . clex
+parse :: String -> CoreProgram
+parse = syntax . clex
 
 type Parser a = [Token] -> [(a, [Token])]
 
 -- parser functions
 
 pSat :: (String -> Bool) -> Parser String
-pSat pred (t : ts) | not (t `elem` keywords) && pred t = [(t, ts)]
+pSat pred (t : ts) | pred t = [(t, ts)]
 pSat _ _ = []
 
 pLit :: String -> Parser String
@@ -61,7 +61,7 @@ pLit s = pSat (== s)
 pVar :: Parser String
 pVar = pSat check
     where
-        check (c : cs) = isAlpha c
+        check token = not (token `elem` keywords) && (isAlpha $ head token)
 --pVar (token : ts) | isAlpha c =
 --    [(token, ts)] where c : cs = token
 --pVar _ = []
@@ -120,6 +120,7 @@ pGreeting =
 pGreetings :: Parser [(String, String)]
 pGreetings = pZeroOrMore pGreeting
 
+--test
 pGreetingsN :: Parser Int
 pGreetingsN = (pZeroOrMore pGreeting) `pApply` length
 
@@ -165,11 +166,13 @@ pExpr =
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
     pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
+    pThen3 mkParenExpr (pLit "(") pExpr (pLit ")") `pOr`
     pAtomicExpr
     where
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
         mkLambdaExpr _ vars _ expr = ELam vars expr
+        mkParenExpr _ expr _ = expr
 
 pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =
@@ -192,7 +195,7 @@ pAlts :: Parser [CoreAlt]
 pAlts = pOneOrMoreWithSep pAlt (pLit ";")
 
 pAlt :: Parser CoreAlt
-pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) (pOneOrMore pVar) (pLit "->") pExpr
+pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) (pZeroOrMore pVar) (pLit "->") pExpr
     where
         mkAlt num vars _ expr = (num, vars, expr)
         mkNum _ num _ = num
