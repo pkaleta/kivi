@@ -151,7 +151,6 @@ syntax = takeFirstParse . pProgram
         takeFirstParse (parse : rest) = takeFirstParse rest
         takeFirstParse _ = error "Syntax error: no successful parse found."
 
-
 pProgram :: Parser CoreProgram
 pProgram = pOneOrMoreWithSep pSc (pLit ";")
 
