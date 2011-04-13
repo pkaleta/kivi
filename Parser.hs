@@ -167,6 +167,7 @@ pExpr =
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
     pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")") `pOr`
+    pOrExpr `pOr`
     pAtomicExpr
     where
         mkLetExpr rec _ defns _ body = ELet rec defns body
@@ -200,14 +201,33 @@ pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) (pZeroOrMore pVar)
         mkAlt num vars _ expr = (num, vars, expr)
         mkNum _ num _ = num
 
---pBinOp :: Parser CoreBinOp
---pBinOp = pArithOp `pOr` pRelOp `pOr` pBoolOp
---
---pArithOp :: Parser CoreArithOp
---pArithOp = (pLit "+") `pOr` (pLit "-") `pOr` (pLit "*") `pOr` (pLit "/")
---
---pRelOp :: Parser CoreRelOp
---pRelOp = (pLit "<") `pOr` (pLit "<=") `pOr` (pLit "==") `pOr` (pLit "~=") `pOr` (pLit ">=") `pOr` (pLit ">")
---
---pBoolOp :: Parser CoreBoolOp
---pBoolOp = (pLit "&") `pOr` (pLit "|")
+mkBinAp :: CoreExpr -> String -> CoreExpr -> CoreExpr
+mkBinAp expr1 name expr2 = (EAp (EAp (EVar name) expr1) expr2)
+
+pOrExpr :: Parser CoreExpr
+pOrExpr = (pThen3 mkBinAp pAndExpr (pLit "|") pOrExpr) `pOr` pAndExpr
+
+pAndExpr :: Parser CoreExpr
+pAndExpr = (pThen3 mkBinAp pRelOpExpr (pLit "&") pAndExpr) `pOr` pRelOpExpr
+
+pRelOpExpr :: Parser CoreExpr
+pRelOpExpr = (pThen3 mkBinAp pAddExpr pRelOp pAddExpr) `pOr` pAddExpr
+
+pRelOp :: Parser String
+pRelOp = (pLit "<") `pOr` (pLit "<=") `pOr` (pLit "==") `pOr` (pLit "~=") `pOr` (pLit ">=") `pOr` (pLit ">")
+
+pAddExpr :: Parser CoreExpr
+pAddExpr = pThen3 mkBinAp pMultExpr (pLit "+") pAddExpr `pOr`
+    pThen3 mkBinAp pMultExpr (pLit "-") pMultExpr `pOr`
+    pMultExpr
+
+pMultExpr :: Parser CoreExpr
+pMultExpr = pThen3 mkBinAp pApExpr (pLit "*") pMultExpr `pOr`
+    pThen3 mkBinAp pApExpr (pLit "/") pApExpr `pOr`
+    pApExpr
+
+pApExpr :: Parser CoreExpr
+pApExpr = ((pOneOrMore pAtomicExpr) `pApply` mkAppChain)
+    where
+        mkAppChain (expr : exprs) = foldl EAp expr exprs
+
