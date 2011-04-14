@@ -59,11 +59,12 @@ eval state = state : restStates
         doAdmin = applyToStats tiStatIncSteps
 
 step :: TiState -> TiState
-step (addr : restAddrs, _, heap, _, _) = dispatch $ hLookup heap addr
+step state = dispatch $ hLookup heap top
     where
+        (top : rest, dump, heap, globals, stats) = state
         dispatch (NNum n) = numStep state n
         dispatch (NSc name args body) = scStep state name args body
-        dispatch (nAp a1 a2) = apStep state a1 a2
+        dispatch (NAp a1 a2) = apStep state a1 a2
 
 numStep :: TiState -> Int -> TiState
 numStep state n = error "Number at the top of the stack."
@@ -72,14 +73,40 @@ apStep :: TiState -> Addr -> Addr -> TiState
 apStep (stack, dump, heap, globals, stats) a1 a2 =
     (a1 : stack, dump, heap, globals, stats)
 
-scStep :: TiState -> Name -> [Name] -> CoreExpr
-scStep (stack0, dump, heap0, globals, stats)  name argNames body =
+scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
+scStep (stack, dump, heap, globals, stats)  name argNames body =
     (stack1, dump, heap1, globals, stats)
     where
-        stack1 = resultAddr : stack0
+        stack1 = resultAddr : (drop (length argNames) stack)
         (heap1, resultAddr) = instantiate body heap env
         env = argBindings ++ globals
-        argBindings = zip argNames getArgAddrs
+        argBindings = zip argNames $ getArgs heap stack
+
+getArgs :: TiHeap -> TiStack -> [Addr]
+getArgs heap (sc : stack) =
+    map (getArg heap) stack
+
+getArg :: TiHeap -> Addr -> Addr
+getArg heap addr = arg
+    where
+        (NAp f arg) = hLookup heap addr
+--    [arg | (NAp f arg) = hLookup heap addr, addr <- stack]
+
+instantiate :: CoreExpr -> TiHeap -> Assoc Name Addr  -> (TiHeap, Addr)
+instantiate (ENum n) heap env = hAlloc heap (NNum n)
+instantiate (EAp e1 e2) heap env =
+    hAlloc heap2 $ NAp a1 a2
+    where
+        (heap1, a1) = instantiate e1 heap env
+        (heap2, a2) = instantiate e2 heap1 env
+instantiate (EVar v) heap env =
+    (heap, aLookup env v $ error $ "Undefined name: " ++ show v)
+instantiate (EConstr tag arity) heap env =
+    error "Could not instantiate constructors for the time being."
+instantiate (ELet isRec defns body)  heap env =
+    error "Could not instantiate let expressions for the time being."
+instantiate (ECase expr alts)  heap env =
+    error "Could not instantiate case expressions for the time being."
 
 tiFinal :: TiState -> Bool
 tiFinal ([addr], _, heap, _, _) = isDataNode (hLookup heap addr)
