@@ -4,6 +4,8 @@ import Lexer
 import Parser
 import Utils
 import List
+import Core
+import Debug.Trace
 
 type TiState = (TiStack, TiDump, TiHeap, TiGlobals, TiStats)
 type TiStack = [Addr]
@@ -12,10 +14,12 @@ type TiGlobals = Assoc Name Addr
 type TiStats = Int
 
 data TiDump = DummyTiDump
+    deriving Show
 data Node
     = NAp Addr Addr
     | NSc Name [Name] CoreExpr
     | NNum Int
+    deriving Show
 
 tiDumpInitial :: TiDump
 tiDumpInitial = DummyTiDump
@@ -32,15 +36,12 @@ tiStatGetSteps s = s
 extraPreludeDefs :: [CoreScDefn]
 extraPreludeDefs = []
 
-preludeDefs :: [CoreScDefn]
-preludeDefs = []
-
 applyToStats :: (TiStats -> TiStats) -> TiState -> TiState
 applyToStats f (stack, dump, heap, globals, stats) =
     (stack, dump, heap, globals, f stats)
 
---runProg :: String -> String
---runProg = showResults . eval . compile . parse
+run :: String -> String
+run = showResults . eval . compile . parse
 
 compile :: CoreProgram -> TiState
 compile program = (stack, tiDumpInitial, heap, globals, tiStatInitial)
@@ -59,7 +60,8 @@ eval state = state : restStates
         doAdmin = applyToStats tiStatIncSteps
 
 step :: TiState -> TiState
-step state = dispatch $ hLookup heap top
+step state =
+    trace ("************* " ++ show top ++ ": " ++ (show $ hLookup heap top)) (dispatch $ hLookup heap top)
     where
         (top : rest, dump, heap, globals, stats) = state
         dispatch (NNum n) = numStep state n
@@ -74,10 +76,10 @@ apStep (stack, dump, heap, globals, stats) a1 a2 =
     (a1 : stack, dump, heap, globals, stats)
 
 scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
-scStep (stack, dump, heap, globals, stats)  name argNames body =
+scStep (stack, dump, heap, globals, stats) name argNames body =
     (stack1, dump, heap1, globals, stats)
     where
-        stack1 = resultAddr : (drop (length argNames) stack)
+        stack1 = resultAddr : (drop (length argNames + 1) stack)
         (heap1, resultAddr) = instantiate body heap env
         env = argBindings ++ globals
         argBindings = zip argNames $ getArgs heap stack
@@ -109,14 +111,16 @@ instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
 
 tiFinal :: TiState -> Bool
-tiFinal ([addr], _, heap, _, _) = isDataNode (hLookup heap addr)
+tiFinal ([addr], dump, heap, globals, stats) = isDataNode (hLookup heap addr)
+tiFinal _ = False
 
 isDataNode :: Node -> Bool
 isDataNode (NNum n) = True
 isDataNode _ = False
 
---showResults :: [TiState] -> String
-
+showResults :: [TiState] -> String
+showResults [] = ""
+showResults ((stack, dump, heap, globals, stats) : rest) = show stack ++ ": " ++ showResults rest
 
 -- local helper functions
 
