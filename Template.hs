@@ -99,20 +99,31 @@ getArg heap addr = arg
 --    [arg | (NAp f arg) = hLookup heap addr, addr <- stack]
 
 instantiate :: CoreExpr -> TiHeap -> Assoc Name Addr  -> (TiHeap, Addr)
+-- numbers
 instantiate (ENum n) heap env = hAlloc heap (NNum n)
+-- applications
 instantiate (EAp e1 e2) heap env =
     hAlloc heap2 $ NAp a1 a2
     where
         (heap1, a1) = instantiate e1 heap env
         (heap2, a2) = instantiate e2 heap1 env
+-- variables
 instantiate (EVar v) heap env =
     (heap, aLookup env v $ error $ "Undefined name: " ++ show v)
-instantiate (ELet isRec defns body) heap env =
+-- let expressions
+instantiate (ELet False defns body) heap env =
     instantiate body heap1 env1
     where
         (heap1, env1) = foldl accumulate (heap, env) defns
+-- letrec expressions
+instantiate (ELet True defns body) heap env =
+    instantiate body heap1 env1
+    where
+        (heap1, env1) = foldl accumulate (heap, env1) defns
+-- constructors
 instantiate (EConstr tag arity) heap env =
     error "Could not instantiate constructors for the time being."
+-- case expressions
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
 
