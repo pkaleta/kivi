@@ -77,12 +77,16 @@ apStep (stack, dump, heap, globals, stats) a1 a2 =
 
 scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
 scStep (stack, dump, heap, globals, stats) name argNames body =
-    (stack1, dump, heap1, globals, stats)
-    where
-        stack1 = resultAddr : (drop (length argNames + 1) stack)
-        (heap1, resultAddr) = instantiate body heap env
-        env = argBindings ++ globals
-        argBindings = zip argNames $ getArgs heap stack
+    case (length argNames + 1) <= length stack of
+        True ->
+            (stack1, dump, heap1, globals, stats)
+            where
+                stack1 = resultAddr : (drop (length argNames + 1) stack)
+                (heap1, resultAddr) = instantiate body heap env
+                env = argBindings ++ globals
+                argBindings = zip argNames $ getArgs heap stack
+        _ ->
+            error "Not enough arguments on the stack"
 
 getArgs :: TiHeap -> TiStack -> [Addr]
 getArgs heap (sc : stack) =
@@ -103,12 +107,20 @@ instantiate (EAp e1 e2) heap env =
         (heap2, a2) = instantiate e2 heap1 env
 instantiate (EVar v) heap env =
     (heap, aLookup env v $ error $ "Undefined name: " ++ show v)
+instantiate (ELet isRec defns body) heap env =
+    instantiate body heap1 env1
+    where
+        (heap1, env1) = foldl accumulate (heap, env) defns
 instantiate (EConstr tag arity) heap env =
     error "Could not instantiate constructors for the time being."
-instantiate (ELet isRec defns body)  heap env =
-    error "Could not instantiate let expressions for the time being."
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
+
+accumulate :: (TiHeap, Assoc Name Addr) -> (Name, CoreExpr) -> (TiHeap, Assoc Name Addr)
+accumulate (heap, env) (name, expr) =
+    (heap1, (name, addr) : env)
+    where
+        (heap1, addr) = instantiate expr heap env
 
 tiFinal :: TiState -> Bool
 tiFinal ([addr], dump, heap, globals, stats) = isDataNode (hLookup heap addr)
@@ -120,7 +132,9 @@ isDataNode _ = False
 
 showResults :: [TiState] -> String
 showResults [] = ""
-showResults ((stack, dump, heap, globals, stats) : rest) = show stack ++ ": " ++ showResults rest
+showResults ((stack, dump, heap, globals, stats) : rest) = 
+    -- show ([hLookup heap addr | addr <- (hAddresses heap)]) ++ "\n" ++ 
+    show (hLookup heap (head stack)) ++ showResults rest
 
 -- local helper functions
 
