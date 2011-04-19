@@ -61,9 +61,10 @@ eval state = state : restStates
 
 step :: TiState -> TiState
 step state =
-    trace ("************* " ++ show top ++ ": " ++ (show $ hLookup heap top)) (dispatch $ hLookup heap top)
+    trace ("************* " ++ show topAddr ++ ": " ++ (show top)) (dispatch top)
     where
-        (top : rest, dump, heap, globals, stats) = state
+        top = hLookup heap topAddr
+        (topAddr : rest, dump, heap, globals, stats) = state
         dispatch (NNum n) = numStep state n
         dispatch (NSc name args body) = scStep state name args body
         dispatch (NAp a1 a2) = apStep state a1 a2
@@ -73,13 +74,13 @@ numStep state n = error "Number at the top of the stack."
 
 apStep :: TiState -> Addr -> Addr -> TiState
 apStep (stack, dump, heap, globals, stats) a1 a2 =
-    (a1 : stack, dump, heap, globals, stats)
+    trace ("stack top: " ++ show a1) (a1 : stack, dump, heap, globals, stats)
 
 scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
 scStep (stack, dump, heap, globals, stats) name argNames body =
     case (length argNames + 1) <= length stack of
         True ->
-            (stack1, dump, heap1, globals, stats)
+            trace ("resultaddr: " ++ show resultAddr) (stack1, dump, heap1, globals, stats)
             where
                 stack1 = resultAddr : (drop (length argNames + 1) stack)
                 (heap1, resultAddr) = instantiate body heap env
@@ -114,12 +115,12 @@ instantiate (EVar v) heap env =
 instantiate (ELet False defns body) heap env =
     instantiate body heap1 env1
     where
-        (heap1, env1) = foldl accumulate (heap, env) defns
+        (heap1, env1) = foldl (accumulate env) (heap, env) defns
 -- letrec expressions
 instantiate (ELet True defns body) heap env =
     instantiate body heap1 env1
     where
-        (heap1, env1) = foldl accumulate (heap, env1) defns
+        (heap1, env1) = foldl (accumulate env1) (heap, env) defns
 -- constructors
 instantiate (EConstr tag arity) heap env =
     error "Could not instantiate constructors for the time being."
@@ -127,9 +128,9 @@ instantiate (EConstr tag arity) heap env =
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
 
-accumulate :: (TiHeap, Assoc Name Addr) -> (Name, CoreExpr) -> (TiHeap, Assoc Name Addr)
-accumulate (heap, env) (name, expr) =
-    (heap1, (name, addr) : env)
+accumulate :: Assoc Name Addr -> (TiHeap, Assoc Name Addr) -> (Name, CoreExpr) -> (TiHeap, Assoc Name Addr)
+accumulate env (heap, env1) (name, expr) =
+    (heap1, (name, addr) : env1)
     where
         (heap1, addr) = instantiate expr heap env
 
@@ -143,9 +144,7 @@ isDataNode _ = False
 
 showResults :: [TiState] -> String
 showResults [] = ""
-showResults ((stack, dump, heap, globals, stats) : rest) = 
-    -- show ([hLookup heap addr | addr <- (hAddresses heap)]) ++ "\n" ++ 
-    show (hLookup heap (head stack)) ++ showResults rest
+showResults ((stack, dump, heap, globals, stats) : rest) = "showresults: " ++ (show $ head stack) ++ ": " ++ show (hLookup heap $ head stack) ++ showResults rest
 
 -- local helper functions
 

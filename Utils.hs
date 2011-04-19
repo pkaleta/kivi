@@ -1,5 +1,7 @@
 module Utils where
 
+import Debug.Trace
+
 
 type Addr = Int
 type Assoc a b = [(a, b)]
