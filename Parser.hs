@@ -165,23 +165,23 @@ pExpr =
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
     pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
-    pThen3 mkParenExpr (pLit "(") pExpr (pLit ")") `pOr`
     pOrExpr `pOr`
     pAtomicExpr
     where
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
         mkLambdaExpr _ vars _ expr = ELam vars expr
-        mkParenExpr _ expr _ = expr
 
 pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
-    pThen3 mkConstr (pLit "Pack{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}")
+    pThen3 mkConstr (pLit "Pack{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
+    pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
     where
         mkConstr _ constr _ = constr
         mkTwoNumbers a _ b = EConstr a b
+        mkParenExpr _ expr _ = expr
 
 pDefns :: Parser [CoreDefn]
 pDefns = pOneOrMoreWithSep pDefn (pLit ";")
@@ -200,33 +200,57 @@ pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) (pZeroOrMore pVar)
         mkAlt num vars _ expr = (num, vars, expr)
         mkNum _ num _ = num
 
-mkBinAp :: CoreExpr -> String -> CoreExpr -> CoreExpr
-mkBinAp expr1 name expr2 = (EAp (EAp (EVar name) expr1) expr2)
+data PartialExpr = NoOp | FoundOp Name CoreExpr
 
+assembleOp :: CoreExpr -> PartialExpr -> CoreExpr
+assembleOp expr1 NoOp = expr1
+assembleOp expr1 (FoundOp name expr2) = EAp (EAp (EVar name) expr1) expr2
+
+-- or expression
 pOrExpr :: Parser CoreExpr
-pOrExpr = (pThen3 mkBinAp pAndExpr (pLit "|") pOrExpr) `pOr` pAndExpr
+pOrExpr = pThen assembleOp pAndExpr pOrExprC
 
+pOrExprC :: Parser PartialExpr
+pOrExprC = (pThen FoundOp (pLit "|") pOrExpr) `pOr` (pEmpty NoOp)
+
+-- and expression
 pAndExpr :: Parser CoreExpr
-pAndExpr = (pThen3 mkBinAp pRelOpExpr (pLit "&") pAndExpr) `pOr` pRelOpExpr
+pAndExpr = pThen assembleOp pRelOpExpr pAndExprC
 
+pAndExprC :: Parser PartialExpr
+pAndExprC = (pThen FoundOp (pLit "&") pAndExpr) `pOr` (pEmpty NoOp)
+
+-- rel op expression
 pRelOpExpr :: Parser CoreExpr
-pRelOpExpr = (pThen3 mkBinAp pAddExpr pRelOp pAddExpr) `pOr` pAddExpr
+pRelOpExpr = pThen assembleOp pAddExpr pRelOpExprC
+
+pRelOpExprC :: Parser PartialExpr
+pRelOpExprC = (pThen FoundOp pRelOp pAndExpr) `pOr` (pEmpty NoOp)
 
 pRelOp :: Parser String
 pRelOp = (pLit "<") `pOr` (pLit "<=") `pOr` (pLit "==") `pOr` (pLit "~=") `pOr` (pLit ">=") `pOr` (pLit ">")
 
+-- additive expression
 pAddExpr :: Parser CoreExpr
-pAddExpr = pThen3 mkBinAp pMultExpr (pLit "+") pAddExpr `pOr`
-    pThen3 mkBinAp pMultExpr (pLit "-") pMultExpr `pOr`
-    pMultExpr
+pAddExpr = pThen assembleOp pMultExpr pAddExprC
 
+pAddExprC :: Parser PartialExpr
+pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr` 
+    (pThen FoundOp (pLit "-") pMultExpr) `pOr`
+    (pEmpty NoOp)
+
+-- multiplicative expression
 pMultExpr :: Parser CoreExpr
-pMultExpr = pThen3 mkBinAp pApExpr (pLit "*") pMultExpr `pOr`
-    pThen3 mkBinAp pApExpr (pLit "/") pApExpr `pOr`
-    pApExpr
+pMultExpr = pThen assembleOp pApExpr pMultExprC
 
+pMultExprC :: Parser PartialExpr
+pMultExprC = (pThen FoundOp (pLit "*") pMultExpr) `pOr`
+    (pThen FoundOp (pLit "/") pApExpr) `pOr`
+    (pEmpty NoOp)
+
+-- applicative expression
 pApExpr :: Parser CoreExpr
-pApExpr = ((pOneOrMore pAtomicExpr) `pApply` mkAppChain)
+pApExpr = ((pOneOrMore pAtomicExpr) `pApply` mkApChain)
     where
-        mkAppChain (expr : exprs) = foldl EAp expr exprs
+        mkApChain (expr : exprs) = foldl EAp expr exprs
 
