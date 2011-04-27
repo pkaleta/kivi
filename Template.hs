@@ -82,7 +82,7 @@ step state =
         dispatch (NInd addr) = (addr : rest, dump, heap, globals, stats)
 
 numStep :: TiState -> Int -> TiState
-numStep (stack, (head : dump), heap, globals, stats) n = (head, dump, heap, globals, stats)
+numStep (stack, (head : dump), heap, globals, stats) n = trace ("jestem " ++ (show head)) (head, dump, heap, globals, stats)
 numStep state n = error "Number at the top of the stack."
 
 apStep :: TiState -> Addr -> Addr -> TiState
@@ -102,17 +102,17 @@ primStep state name Neg = primNeg state
 
 primNeg :: TiState -> TiState
 primNeg (stack, dump, heap, globals, stats) =
-    case node of
+    case trace ("primneg arg: " ++ (show node)) node of
         (NNum v) ->
             (stack', dump, heap', globals, stats)
             where
                 heap' = hUpdate heap root (NNum $ -v)
-                (ap : stack') = stack
+                stack' = tail stack
         _ ->
             (stack', dump', heap, globals, stats)
             where
                 stack' = [addr]
-                dump' = stack : dump
+                dump' = (tail stack) : dump
     where
         node = hLookup heap addr
         addr = getArg heap $ root
