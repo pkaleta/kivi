@@ -13,7 +13,6 @@ hInitial = (0, [1..], [])
 hAlloc :: Heap a -> a -> (Heap a, Addr)
 hAlloc (size, addr : free, assoc) obj = ((size + 1, free, (addr, obj) : assoc), addr)
 
---shouldn't it also remove the addr from free addresses?
 hUpdate :: Heap a -> Addr -> a -> Heap a
 hUpdate (size, free, assoc) addr obj = (size, free, (addr, obj) : remove addr assoc)
 

@@ -13,16 +13,26 @@ type TiHeap = Heap Node
 type TiGlobals = Assoc Name Addr
 type TiStats = Int
 
-data TiDump = DummyTiDump
-    deriving Show
+type TiDump = [TiStack]
 data Node
     = NAp Addr Addr
     | NSc Name [Name] CoreExpr
     | NNum Int
+    | NInd Addr
+    | NPrim Name Primitive
+    deriving Show
+data Primitive = Neg | Add | Sub | Mul | Div
     deriving Show
 
+primitives :: Assoc Name Primitive
+primitives = [("negate", Neg),
+              ("add", Add),
+              ("sub", Sub),
+              ("mul", Mul),
+              ("div", Div)]
+
 tiDumpInitial :: TiDump
-tiDumpInitial = DummyTiDump
+tiDumpInitial = []
 
 tiStatInitial :: TiStats
 tiStatInitial = 0
@@ -68,26 +78,62 @@ step state =
         dispatch (NNum n) = numStep state n
         dispatch (NSc name args body) = scStep state name args body
         dispatch (NAp a1 a2) = apStep state a1 a2
+        dispatch (NPrim name primitive) = primStep state name primitive
+        dispatch (NInd addr) = (addr : rest, dump, heap, globals, stats)
 
 numStep :: TiState -> Int -> TiState
+numStep (stack, (head : dump), heap, globals, stats) n = (head, dump, heap, globals, stats)
 numStep state n = error "Number at the top of the stack."
 
 apStep :: TiState -> Addr -> Addr -> TiState
 apStep (stack, dump, heap, globals, stats) a1 a2 =
-    trace ("stack top: " ++ show a1) (a1 : stack, dump, heap, globals, stats)
+    case hLookup heap a2 of
+        (NInd addr) ->
+            (stack, dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap topAddr $ NAp a1 addr
+                (topAddr : addrs) = stack
+        _ ->
+            --trace ("stack top: " ++ show a1)
+            (a1 : stack, dump, heap, globals, stats)
+
+primStep :: TiState -> Name -> Primitive -> TiState
+primStep state name Neg = primNeg state
+
+primNeg :: TiState -> TiState
+primNeg (stack, dump, heap, globals, stats) =
+    case node of
+        (NNum v) ->
+            (stack', dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap root (NNum $ -v)
+                (ap : stack') = stack
+        _ ->
+            (stack', dump', heap, globals, stats)
+            where
+                stack' = [addr]
+                dump' = stack : dump
+    where
+        node = hLookup heap addr
+        addr = getArg heap $ root
+        root = stack !! 1
 
 scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
 scStep (stack, dump, heap, globals, stats) name argNames body =
-    case (length argNames + 1) <= length stack of
+    case (n + 1) <= length stack of
         True ->
-            trace ("resultaddr: " ++ show resultAddr) (stack1, dump, heap1, globals, stats)
+            (stack1, dump, heap2, globals, stats)
             where
-                stack1 = resultAddr : (drop (length argNames + 1) stack)
+                an = stack !! n
+                stack1 = resultAddr : (drop (n + 1) stack)
                 (heap1, resultAddr) = instantiate body heap env
+                heap2 = hUpdate heap1 an (NInd resultAddr)
                 env = argBindings ++ globals
                 argBindings = zip argNames $ getArgs heap stack
         _ ->
             error "Not enough arguments on the stack"
+    where
+        n = length argNames
 
 getArgs :: TiHeap -> TiStack -> [Addr]
 getArgs heap (sc : stack) =
@@ -97,7 +143,22 @@ getArg :: TiHeap -> Addr -> Addr
 getArg heap addr = arg
     where
         (NAp f arg) = hLookup heap addr
---    [arg | (NAp f arg) = hLookup heap addr, addr <- stack]
+
+--instantiateAndUpdate :: CoreExpr -> Addr -> TiHeap -> Assoc Name Addr -> TiHeap
+--instantiateAndUpdate (ENum n) toUpdate heap env =
+--    hUpdate heap toUpdate (NNum n)
+--instantiateAndUpdate (EAp e1 e2) toUpdate heap env =
+--    hUpdate heap2 toUpdate (NAp a1 a2)
+--    where
+--        (heap1, a1) = instantiate e1 heap env
+--        (heap2, a2) = instantiate e2 heap1 env
+--instantiateAndUpdate (EVar v) toUpdate heap env =
+--    hUpdate heap toUpdate (NInd $ aLookup env v $ error $ "Undefined name: " ++ show v)
+--instantiateAndUpdate (ELet False defns body) heap env
+--    hUpdate heap2 toUpdate (NInd addr)
+--    where
+--        (heap2, addr) = instantiate body heap1 env1
+--        (heap1, env1) = foldl (accumulate env) (heap, env) defns
 
 instantiate :: CoreExpr -> TiHeap -> Assoc Name Addr  -> (TiHeap, Addr)
 -- numbers
@@ -135,7 +196,7 @@ accumulate env (heap, env1) (name, expr) =
         (heap1, addr) = instantiate expr heap env
 
 tiFinal :: TiState -> Bool
-tiFinal ([addr], dump, heap, globals, stats) = isDataNode (hLookup heap addr)
+tiFinal ([addr], [], heap, globals, stats) = isDataNode (hLookup heap addr)
 tiFinal _ = False
 
 isDataNode :: Node -> Bool
@@ -149,10 +210,19 @@ showResults ((stack, dump, heap, globals, stats) : rest) = "showresults: " ++ (s
 -- local helper functions
 
 buildInitialHeap :: [CoreScDefn] -> (TiHeap, TiGlobals)
-buildInitialHeap scDefs = mapAccumL allocateSc hInitial scDefs
+buildInitialHeap scDefs =
+    (heap2, scAddrs ++ primAddrs)
+    where
+        (heap1, scAddrs) = mapAccumL allocateSc hInitial scDefs
+        (heap2, primAddrs) = mapAccumL allocatePrim heap1 primitives
 
 allocateSc :: TiHeap -> CoreScDefn -> (TiHeap, (Name, Addr))
-allocateSc heap (name, args, body) = (heap1, (name, addr))
+allocateSc heap (name, args, body) = (heap', (name, addr))
     where
-        (heap1, addr) = hAlloc heap $ NSc name args body
+        (heap', addr) = hAlloc heap $ NSc name args body
+
+allocatePrim :: TiHeap -> (Name, Primitive) -> (TiHeap, (Name, Addr))
+allocatePrim heap (name, primitive) = (heap', (name, addr))
+    where
+        (heap', addr) = hAlloc heap $ NPrim name primitive
 
