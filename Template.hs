@@ -105,7 +105,7 @@ primStep state name Mul = primArith state (*)
 primStep state name Div = primArith state (div)
 
 primArith :: TiState -> (Int -> Int -> Int) -> TiState
-primArith state op =
+primArith (stack, dump, heap, globals, stats) op =
     case node1 of
         (NNum v1) ->
             case node2 of
@@ -113,25 +113,33 @@ primArith state op =
                     (stack', dump, heap', globals, stats)
                     where
                         stack' = drop 2 stack
-                        heap' = hUpdate heap ap2 (NNum $ op v1 v2)
+                        heap' = hUpdate heap root2 (NNum $ op v1 v2)
+                (NInd a2) ->
+                    (stack, dump, heap', globals, stats)
+                    where
+                        heap' = hUpdate heap addr2 (hLookup heap a2)
                 _ ->
                     (stack', dump', heap, globals, stats)
                     where
                         stack' = [addr2]
                         dump' = stack : dump
+                where
+                    node2 = hLookup heap addr2
+                    addr2 = getArg heap root2
+                    root2 = stack !! 2
+        (NInd a1) ->
+            (stack, dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap addr1 (hLookup heap a1)
         _ ->
             (stack', dump', heap, globals, stats)
             where
                 stack' = [addr1]
                 dump' = stack : dump
     where
-        (stack, dump, heap, globals, stats) = state
         node1 = hLookup heap addr1
-        node2 = hLookup heap addr2
-        addr1 = getArg heap ap1
-        addr2 = getArg heap ap2
-        ap1 = stack !! 1
-        ap2 = stack !! 2
+        addr1 = getArg heap root1
+        root1 = stack !! 1
 
 primNeg :: TiState -> TiState
 primNeg (stack, dump, heap, globals, stats) =
