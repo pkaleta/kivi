@@ -26,10 +26,10 @@ data Primitive = Neg | Add | Sub | Mul | Div
 
 primitives :: Assoc Name Primitive
 primitives = [("negate", Neg),
-              ("add", Add),
-              ("sub", Sub),
-              ("mul", Mul),
-              ("div", Div)]
+              ("+", Add),
+              ("-", Sub),
+              ("*", Mul),
+              ("/", Div)]
 
 tiDumpInitial :: TiDump
 tiDumpInitial = []
@@ -99,6 +99,39 @@ apStep (stack, dump, heap, globals, stats) a1 a2 =
 
 primStep :: TiState -> Name -> Primitive -> TiState
 primStep state name Neg = primNeg state
+primStep state name Add = primArith state (+)
+primStep state name Sub = primArith state (-)
+primStep state name Mul = primArith state (*)
+primStep state name Div = primArith state (div)
+
+primArith :: TiState -> (Int -> Int -> Int) -> TiState
+primArith state op =
+    case node1 of
+        (NNum v1) ->
+            case node2 of
+                (NNum v2) ->
+                    (stack', dump, heap', globals, stats)
+                    where
+                        stack' = drop 2 stack
+                        heap' = hUpdate heap ap2 (NNum $ op v1 v2)
+                _ ->
+                    (stack', dump', heap, globals, stats)
+                    where
+                        stack' = [addr2]
+                        dump' = stack : dump
+        _ ->
+            (stack', dump', heap, globals, stats)
+            where
+                stack' = [addr1]
+                dump' = stack : dump
+    where
+        (stack, dump, heap, globals, stats) = state
+        node1 = hLookup heap addr1
+        node2 = hLookup heap addr2
+        addr1 = getArg heap ap1
+        addr2 = getArg heap ap2
+        ap1 = stack !! 1
+        ap2 = stack !! 2
 
 primNeg :: TiState -> TiState
 primNeg (stack, dump, heap, globals, stats) =
@@ -115,7 +148,7 @@ primNeg (stack, dump, heap, globals, stats) =
                 dump' = (tail stack) : dump
     where
         node = hLookup heap addr
-        addr = getArg heap $ root
+        addr = getArg heap root
         root = stack !! 1
 
 scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
