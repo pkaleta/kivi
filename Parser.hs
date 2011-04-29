@@ -11,6 +11,7 @@ data Expr a
     | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
+    | EIf (Expr a) (Expr a) (Expr a)        -- if expression
     deriving (Show)
 
 type Name = String
@@ -165,9 +166,11 @@ pExpr =
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
     pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
+    pThen4 mkIf (pLit "if") pExpr pExpr pExpr `pOr`
     pOrExpr `pOr`
     pAtomicExpr
     where
+        mkIf _ cond exprTrue exprFalse = EIf cond exprTrue exprFalse
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
         mkLambdaExpr _ vars _ expr = ELam vars expr
@@ -176,10 +179,10 @@ pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
-    pThen3 mkConstr (pLit "Pack{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
+    pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
     where
-        mkConstr _ constr _ = constr
+        mkConstr _ _ constr _ = constr
         mkTwoNumbers a _ b = EConstr a b
         mkParenExpr _ expr _ = expr
 

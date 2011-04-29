@@ -14,14 +14,18 @@ type TiGlobals = Assoc Name Addr
 type TiStats = Int
 
 type TiDump = [TiStack]
+
 data Node
     = NAp Addr Addr
     | NSc Name [Name] CoreExpr
     | NNum Int
     | NInd Addr
     | NPrim Name Primitive
+    | NData Int [Addr]
+    | NIf Addr (Expr Name) (Expr Name)
     deriving Show
-data Primitive = Neg | Add | Sub | Mul | Div
+
+data Primitive = Neg | Add | Sub | Mul | Div | PrimConstr Int Int | Greater | GreaterEq | Less | LessEq | Eq | NotEq
     deriving Show
 
 primitives :: Assoc Name Primitive
@@ -29,7 +33,15 @@ primitives = [("negate", Neg),
               ("+", Add),
               ("-", Sub),
               ("*", Mul),
-              ("/", Div)]
+              ("/", Div),
+              (">", Greater),
+              (">=", GreaterEq),
+              ("<", Less),
+              ("<=", LessEq),
+              ("==", Eq),
+              ("!=", NotEq),
+              ("False", PrimConstr 1 0),
+              ("True", PrimConstr 2 0)]
 
 tiDumpInitial :: TiDump
 tiDumpInitial = []
@@ -80,10 +92,35 @@ step state =
         dispatch (NAp a1 a2) = apStep state a1 a2
         dispatch (NPrim name primitive) = primStep state name primitive
         dispatch (NInd addr) = (addr : rest, dump, heap, globals, stats)
+        dispatch (NData tag args) = dataStep state tag args
+        dispatch (NIf cond et ef) = ifStep state cond et ef
 
 numStep :: TiState -> Int -> TiState
 numStep (stack, (head : dump), heap, globals, stats) n = trace ("jestem " ++ (show head)) (head, dump, heap, globals, stats)
 numStep state n = error "Number at the top of the stack."
+
+dataStep :: TiState -> Int -> [Addr] -> TiState
+dataStep (stack, (head : dump), heap, globals, stats) tag args = (head, dump, heap, globals, stats)
+dataStep state tag args = error "Data object at the top of the stack."
+
+ifStep :: TiState -> Addr -> (Expr Name) -> (Expr Name) -> TiState
+ifStep (stack, dump, heap, globals, stats) condAddr et ef =
+    case trace ("**************" ++ show cond) cond of
+        (NData 1 []) -> -- False
+            evalBranch ef
+        (NData 2 []) -> -- True
+            evalBranch et
+        node ->
+            (stack', dump', heap, globals, stats)
+            where
+                stack' = [condAddr]
+                dump' = stack : dump
+    where
+        cond = hLookup heap condAddr
+        evalBranch expr = (stack', dump, heap', globals, stats)
+            where
+                (heap', addr) = instantiate et heap globals
+                stack' = addr : (tail stack)
 
 apStep :: TiState -> Addr -> Addr -> TiState
 apStep (stack, dump, heap, globals, stats) a1 a2 =
@@ -103,6 +140,15 @@ primStep state name Add = primArith state (+)
 primStep state name Sub = primArith state (-)
 primStep state name Mul = primArith state (*)
 primStep state name Div = primArith state (div)
+primStep state name (PrimConstr tag arity) = primConstr state tag arity
+
+primConstr :: TiState -> Int -> Int -> TiState
+primConstr (stack, dump, heap, globals, stats) tag arity =
+    trace ("**********" ++ show stack) (stack', dump, heap', globals, stats)
+    where
+        args = map (getArg heap) $ take arity $ tail stack
+        heap' = hUpdate heap (stack !! arity) $ NData tag args
+        stack' = drop arity stack
 
 primArith :: TiState -> (Int -> Int -> Int) -> TiState
 primArith (stack, dump, heap, globals, stats) op =
@@ -225,7 +271,11 @@ instantiate (ELet True defns body) heap env =
         (heap1, env1) = foldl (accumulate env1) (heap, env) defns
 -- constructors
 instantiate (EConstr tag arity) heap env =
-    error "Could not instantiate constructors for the time being."
+    hAlloc heap $ NPrim "Pack" $ PrimConstr tag arity
+instantiate (EIf cond et ef) heap env =
+    hAlloc heap' $ NIf condAddr et ef
+    where
+        (heap', condAddr) = instantiate cond heap env
 -- case expressions
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
@@ -242,6 +292,7 @@ tiFinal _ = False
 
 isDataNode :: Node -> Bool
 isDataNode (NNum n) = True
+isDataNode (NData _ _) = True
 isDataNode _ = False
 
 showResults :: [TiState] -> String
