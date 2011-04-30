@@ -22,7 +22,7 @@ data Node
     | NInd Addr
     | NPrim Name Primitive
     | NData Int [Addr]
-    | NIf Addr (Expr Name) (Expr Name)
+    | NIf Addr Addr Addr
     deriving Show
 
 data Primitive = Neg | Add | Sub | Mul | Div | PrimConstr Int Int | Greater | GreaterEq | Less | LessEq | Eq | NotEq
@@ -103,24 +103,24 @@ dataStep :: TiState -> Int -> [Addr] -> TiState
 dataStep (stack, (head : dump), heap, globals, stats) tag args = (head, dump, heap, globals, stats)
 dataStep state tag args = error "Data object at the top of the stack."
 
-ifStep :: TiState -> Addr -> (Expr Name) -> (Expr Name) -> TiState
+ifStep :: TiState -> Addr -> Addr -> Addr -> TiState
 ifStep (stack, dump, heap, globals, stats) condAddr et ef =
-    case trace ("**************" ++ show cond) cond of
+    case trace ("************* if: " ++ show cond) cond of
         (NData 1 []) -> -- False
             evalBranch ef
         (NData 2 []) -> -- True
             evalBranch et
-        node ->
+        _ ->
             (stack', dump', heap, globals, stats)
             where
                 stack' = [condAddr]
                 dump' = stack : dump
     where
         cond = hLookup heap condAddr
-        evalBranch expr = (stack', dump, heap', globals, stats)
+        evalBranch addr = (stack', dump, heap', globals, stats)
             where
-                (heap', addr) = instantiate et heap globals
                 stack' = addr : (tail stack)
+                heap' = hUpdate heap (head stack) $ hLookup heap addr
 
 apStep :: TiState -> Addr -> Addr -> TiState
 apStep (stack, dump, heap, globals, stats) a1 a2 =
@@ -141,6 +141,11 @@ primStep state name Sub = primArith state (-)
 primStep state name Mul = primArith state (*)
 primStep state name Div = primArith state (div)
 primStep state name (PrimConstr tag arity) = primConstr state tag arity
+primStep state name Less = primComp state (<)
+primStep state name LessEq = primComp state (<=)
+primStep state name Eq = primComp state (==)
+primStep state name Greater = primComp state (>)
+primStep state name GreaterEq = primComp state (>=)
 
 primConstr :: TiState -> Int -> Int -> TiState
 primConstr (stack, dump, heap, globals, stats) tag arity =
@@ -150,16 +155,16 @@ primConstr (stack, dump, heap, globals, stats) tag arity =
         heap' = hUpdate heap (stack !! arity) $ NData tag args
         stack' = drop arity stack
 
-primArith :: TiState -> (Int -> Int -> Int) -> TiState
-primArith (stack, dump, heap, globals, stats) op =
+primDyadic :: TiState -> (Node -> Node -> Node) -> TiState
+primDyadic (stack, dump, heap, globals, stats) comb =
     case node1 of
         (NNum v1) ->
-            case node2 of
+            case trace ("jestem" ++ (show node1)) node2 of
                 (NNum v2) ->
-                    (stack', dump, heap', globals, stats)
+                    trace ("jestem" ++ (show node2)) (stack', dump, heap', globals, stats)
                     where
                         stack' = drop 2 stack
-                        heap' = hUpdate heap root2 (NNum $ op v1 v2)
+                        heap' = hUpdate heap root2 $ comb node1 node2
                 (NInd a2) ->
                     (stack, dump, heap', globals, stats)
                     where
@@ -187,6 +192,28 @@ primArith (stack, dump, heap, globals, stats) op =
         addr1 = getArg heap root1
         root1 = stack !! 1
 
+primArith :: TiState -> (Int -> Int -> Int) -> TiState
+primArith state op = primDyadic state nComb
+    where
+        nComb n1 n2 =
+            NNum $ op v1 v2
+            where
+                (NNum v1) = n1
+                (NNum v2) = n2
+
+primComp :: TiState -> (Int -> Int -> Bool) -> TiState
+primComp state op = primDyadic state nComb
+    where
+        nComb n1 n2 =
+            case op v1 v2 of
+                True ->
+                    NData 2 []
+                False ->
+                    NData 1 []
+            where
+                (NNum v1) = n1
+                (NNum v2) = n2
+
 primNeg :: TiState -> TiState
 primNeg (stack, dump, heap, globals, stats) =
     case trace ("primneg arg: " ++ (show node)) node of
@@ -209,12 +236,12 @@ scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
 scStep (stack, dump, heap, globals, stats) name argNames body =
     case (n + 1) <= length stack of
         True ->
-            (stack1, dump, heap2, globals, stats)
+            (stack', dump, heap2, globals, stats)
             where
                 an = stack !! n
-                stack1 = resultAddr : (drop (n + 1) stack)
+                stack' = resultAddr : (drop (n + 1) stack)
                 (heap1, resultAddr) = instantiate body heap env
-                heap2 = hUpdate heap1 an (NInd resultAddr)
+                heap2 = trace ("update: " ++ (show an) ++ ", " ++ (show resultAddr)) hUpdate heap1 an (NInd resultAddr)
                 env = argBindings ++ globals
                 argBindings = zip argNames $ getArgs heap stack
         _ ->
@@ -273,9 +300,11 @@ instantiate (ELet True defns body) heap env =
 instantiate (EConstr tag arity) heap env =
     hAlloc heap $ NPrim "Pack" $ PrimConstr tag arity
 instantiate (EIf cond et ef) heap env =
-    hAlloc heap' $ NIf condAddr et ef
+    hAlloc heap3 $ NIf condAddr etAddr efAddr
     where
-        (heap', condAddr) = instantiate cond heap env
+        (heap1, condAddr) = instantiate cond heap env
+        (heap2, etAddr) = instantiate et heap1 env
+        (heap3, efAddr) = instantiate ef heap2 env
 -- case expressions
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
@@ -297,7 +326,7 @@ isDataNode _ = False
 
 showResults :: [TiState] -> String
 showResults [] = ""
-showResults ((stack, dump, heap, globals, stats) : rest) = "showresults: " ++ (show $ head stack) ++ ": " ++ show (hLookup heap $ head stack) ++ showResults rest
+showResults ((stack, dump, heap, globals, stats) : rest) = "showresults: " ++ (show stack) ++ ": " ++ show (hLookup heap $ head stack) ++ showResults rest
 
 -- local helper functions
 
