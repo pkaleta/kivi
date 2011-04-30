@@ -11,7 +11,6 @@ data Expr a
     | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
-    | EIf (Expr a) (Expr a) (Expr a)        -- if expression
     deriving (Show)
 
 type Name = String
@@ -166,11 +165,9 @@ pExpr =
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
     pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
-    pThen4 mkIf (pLit "if") pExpr pExpr pExpr `pOr`
     pOrExpr `pOr`
     pAtomicExpr
     where
-        mkIf _ cond exprTrue exprFalse = EIf cond exprTrue exprFalse
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
         mkLambdaExpr _ vars _ expr = ELam vars expr
@@ -231,7 +228,7 @@ pRelOpExprC :: Parser PartialExpr
 pRelOpExprC = (pThen FoundOp pRelOp pAndExpr) `pOr` (pEmpty NoOp)
 
 pRelOp :: Parser String
-pRelOp = (pLit "<") `pOr` (pLit "<=") `pOr` (pLit "==") `pOr` (pLit "~=") `pOr` (pLit ">=") `pOr` (pLit ">")
+pRelOp = (pLit "<") `pOr` (pLit "<=") `pOr` (pLit "==") `pOr` (pLit "!=") `pOr` (pLit ">=") `pOr` (pLit ">")
 
 -- additive expression
 pAddExpr :: Parser CoreExpr

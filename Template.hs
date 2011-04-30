@@ -25,7 +25,7 @@ data Node
     | NIf Addr Addr Addr
     deriving Show
 
-data Primitive = Neg | Add | Sub | Mul | Div | PrimConstr Int Int | Greater | GreaterEq | Less | LessEq | Eq | NotEq
+data Primitive = Neg | Add | Sub | Mul | Div | PrimConstr Int Int | If | Greater | GreaterEq | Less | LessEq | Eq | NotEq
     deriving Show
 
 primitives :: Assoc Name Primitive
@@ -40,6 +40,7 @@ primitives = [("negate", Neg),
               ("<=", LessEq),
               ("==", Eq),
               ("!=", NotEq),
+              ("if", If),
               ("False", PrimConstr 1 0),
               ("True", PrimConstr 2 0)]
 
@@ -56,7 +57,7 @@ tiStatGetSteps :: TiStats -> Int
 tiStatGetSteps s = s
 
 extraPreludeDefs :: [CoreScDefn]
-extraPreludeDefs = []
+extraPreludeDefs = []--[("and", ["x", "y"], EIf (EVar "x") (EVar "y") (EVar "False"))]
 
 applyToStats :: (TiStats -> TiStats) -> TiState -> TiState
 applyToStats f (stack, dump, heap, globals, stats) =
@@ -93,7 +94,6 @@ step state =
         dispatch (NPrim name primitive) = primStep state name primitive
         dispatch (NInd addr) = (addr : rest, dump, heap, globals, stats)
         dispatch (NData tag args) = dataStep state tag args
-        dispatch (NIf cond et ef) = ifStep state cond et ef
 
 numStep :: TiState -> Int -> TiState
 numStep (stack, (head : dump), heap, globals, stats) n = trace ("jestem " ++ (show head)) (head, dump, heap, globals, stats)
@@ -102,25 +102,6 @@ numStep state n = error "Number at the top of the stack."
 dataStep :: TiState -> Int -> [Addr] -> TiState
 dataStep (stack, (head : dump), heap, globals, stats) tag args = (head, dump, heap, globals, stats)
 dataStep state tag args = error "Data object at the top of the stack."
-
-ifStep :: TiState -> Addr -> Addr -> Addr -> TiState
-ifStep (stack, dump, heap, globals, stats) condAddr et ef =
-    case trace ("************* if: " ++ show cond) cond of
-        (NData 1 []) -> -- False
-            evalBranch ef
-        (NData 2 []) -> -- True
-            evalBranch et
-        _ ->
-            (stack', dump', heap, globals, stats)
-            where
-                stack' = [condAddr]
-                dump' = stack : dump
-    where
-        cond = hLookup heap condAddr
-        evalBranch addr = (stack', dump, heap', globals, stats)
-            where
-                stack' = addr : (tail stack)
-                heap' = hUpdate heap (head stack) $ hLookup heap addr
 
 apStep :: TiState -> Addr -> Addr -> TiState
 apStep (stack, dump, heap, globals, stats) a1 a2 =
@@ -141,11 +122,36 @@ primStep state name Sub = primArith state (-)
 primStep state name Mul = primArith state (*)
 primStep state name Div = primArith state (div)
 primStep state name (PrimConstr tag arity) = primConstr state tag arity
+primStep state name If = primIf state
 primStep state name Less = primComp state (<)
 primStep state name LessEq = primComp state (<=)
 primStep state name Eq = primComp state (==)
 primStep state name Greater = primComp state (>)
 primStep state name GreaterEq = primComp state (>=)
+
+primIf :: TiState -> TiState
+primIf (stack, dump, heap, globals, stats) =
+    case condNode of
+        (NData 1 []) -> -- False
+            branch efAddr
+        (NData 2 []) -> -- True
+            branch etAddr
+        _ ->
+            (stack', dump', heap, globals, stats)
+            where
+                stack' = [condAddr]
+                dump' = stack : dump
+    where
+        [a0, a1, a2, a3] = take 4 stack
+        condAddr = getArg heap a1
+        etAddr = getArg heap a2
+        efAddr = getArg heap a3
+        condNode = hLookup heap condAddr
+
+        branch addr = (stack', dump, heap', globals, stats)
+            where
+                stack' = drop 3 stack
+                heap' = hUpdate heap a3 $ NInd addr
 
 primConstr :: TiState -> Int -> Int -> TiState
 primConstr (stack, dump, heap, globals, stats) tag arity =
@@ -299,12 +305,12 @@ instantiate (ELet True defns body) heap env =
 -- constructors
 instantiate (EConstr tag arity) heap env =
     hAlloc heap $ NPrim "Pack" $ PrimConstr tag arity
-instantiate (EIf cond et ef) heap env =
-    hAlloc heap3 $ NIf condAddr etAddr efAddr
-    where
-        (heap1, condAddr) = instantiate cond heap env
-        (heap2, etAddr) = instantiate et heap1 env
-        (heap3, efAddr) = instantiate ef heap2 env
+--instantiate (EIf cond et ef) heap env =
+--    hAlloc heap3 $ NIf condAddr etAddr efAddr
+--    where
+--        (heap1, condAddr) = instantiate cond heap env
+--        (heap2, etAddr) = instantiate et heap1 env
+--        (heap3, efAddr) = instantiate ef heap2 env
 -- case expressions
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."
