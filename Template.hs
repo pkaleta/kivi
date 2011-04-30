@@ -57,7 +57,10 @@ tiStatGetSteps :: TiStats -> Int
 tiStatGetSteps s = s
 
 extraPreludeDefs :: [CoreScDefn]
-extraPreludeDefs = []--[("and", ["x", "y"], EIf (EVar "x") (EVar "y") (EVar "False"))]
+extraPreludeDefs = [("and", ["x", "y"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EVar "y")) (EVar "False")),
+                    ("or", ["x", "y"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EVar "True")) (EVar "y")),
+                    ("xor", ["x", "y"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EAp (EVar "not") (EVar "y"))) (EVar "y")),
+                    ("not", ["x"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EVar "False")) (EVar "True"))]
 
 applyToStats :: (TiStats -> TiStats) -> TiState -> TiState
 applyToStats f (stack, dump, heap, globals, stats) =
@@ -136,6 +139,11 @@ primIf (stack, dump, heap, globals, stats) =
             branch efAddr
         (NData 2 []) -> -- True
             branch etAddr
+        (NInd addr) ->
+            (stack', dump, heap', globals, stats)
+            where
+                stack' = tail stack
+                heap' = hUpdate heap condAddr $ hLookup heap addr
         _ ->
             (stack', dump', heap, globals, stats)
             where
