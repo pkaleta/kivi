@@ -47,7 +47,8 @@ primitives = [("negate", Neg),
               ("MkPair", PrimConstr 3 2),
               ("Nil", PrimConstr 4 0),
               ("Cons", PrimCons),
-              ("CaseList", PrimCaseList)]
+              ("CaseList", PrimCaseList),
+              ("abort", error "Calling head/tail on empty list")]
 
 tiDumpInitial :: TiDump
 tiDumpInitial = []
@@ -68,8 +69,8 @@ extraPreludeDefs = [("and", ["x", "y"], EAp (EAp (EAp (EVar "if") (EVar "x")) (E
                     ("not", ["x"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EVar "False")) (EVar "True")),
                     ("fst", ["p"], EAp (EAp (EVar "CasePair") (EVar "p")) (EVar "K")),
                     ("snd", ["p"], EAp (EAp (EVar "CasePair") (EVar "p")) (EVar "K1")),
-                    ("head", ["l"], EAp (EAp (EAp (EVar "CaseList") (EVar "l")) (EVar "K")) (EVar "K")),
-                    ("tail", ["l"], EAp (EAp (EAp (EVar "CaseList") (EVar "l")) (EVar "K1")) (EVar "K1"))]
+                    ("head", ["l"], EAp (EAp (EAp (EVar "CaseList") (EVar "l")) (EVar "abort")) (EVar "K")),
+                    ("tail", ["l"], EAp (EAp (EAp (EVar "CaseList") (EVar "l")) (EVar "abort")) (EVar "K1"))]
 
 applyToStats :: (TiStats -> TiStats) -> TiState -> TiState
 applyToStats f (stack, dump, heap, globals, stats) =
@@ -180,6 +181,8 @@ primCaseList (stack, dump, heap, globals, stats) =
                 heap2 = hUpdate heap1 a2 $ NAp a1 x
                 heap3 = hUpdate heap2 a3 $ NAp a2 xs
                 stack' = tail stack
+        (NNum _) ->
+            error "Second argument to cons mustn't be a number"
         (NInd addr) ->
             (stack, dump, heap', globals, stats)
             where
@@ -192,8 +195,8 @@ primCaseList (stack, dump, heap, globals, stats) =
     where
         [a0, a1, a2, a3] = take 4 stack
         listAddr = getArg heap a1
-        ccAddr = getArg heap a2
-        cnAddr = getArg heap a3
+        cnAddr = getArg heap a2
+        ccAddr = getArg heap a3
         listNode = hLookup heap listAddr
 
 primCasePair :: TiState -> TiState
