@@ -180,6 +180,10 @@ primCaseList (stack, dump, heap, globals, stats) =
                 heap2 = hUpdate heap1 a2 $ NAp a1 x
                 heap3 = hUpdate heap2 a3 $ NAp a2 xs
                 stack' = tail stack
+        (NInd addr) ->
+            (stack, dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap listAddr $ hLookup heap addr
         _ ->
             (stack', dump', heap, globals, stats)
             where
