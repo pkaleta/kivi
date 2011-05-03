@@ -25,7 +25,7 @@ data Node
     | NIf Addr Addr Addr
     deriving Show
 
-data Primitive = Neg | Add | Sub | Mul | Div | PrimConstr Int Int | If | Greater | GreaterEq | Less | LessEq | Eq | NotEq | PrimCasePair
+data Primitive = Neg | Add | Sub | Mul | Div | PrimConstr Int Int | If | Greater | GreaterEq | Less | LessEq | Eq | NotEq | PrimCasePair | PrimCaseList | PrimCons
     deriving Show
 
 primitives :: Assoc Name Primitive
@@ -44,7 +44,10 @@ primitives = [("negate", Neg),
               ("False", PrimConstr 1 0),
               ("True", PrimConstr 2 0),
               ("CasePair", PrimCasePair),
-              ("MkPair", PrimConstr 1 2)]
+              ("MkPair", PrimConstr 3 2),
+              ("Nil", PrimConstr 4 0),
+              ("Cons", PrimCons),
+              ("CaseList", PrimCaseList)]
 
 tiDumpInitial :: TiDump
 tiDumpInitial = []
@@ -64,7 +67,9 @@ extraPreludeDefs = [("and", ["x", "y"], EAp (EAp (EAp (EVar "if") (EVar "x")) (E
                     ("xor", ["x", "y"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EAp (EVar "not") (EVar "y"))) (EVar "y")),
                     ("not", ["x"], EAp (EAp (EAp (EVar "if") (EVar "x")) (EVar "False")) (EVar "True")),
                     ("fst", ["p"], EAp (EAp (EVar "CasePair") (EVar "p")) (EVar "K")),
-                    ("snd", ["p"], EAp (EAp (EVar "CasePair") (EVar "p")) (EVar "K1"))]
+                    ("snd", ["p"], EAp (EAp (EVar "CasePair") (EVar "p")) (EVar "K1")),
+                    ("head", ["l"], EAp (EAp (EAp (EVar "CaseList") (EVar "l")) (EVar "K")) (EVar "K")),
+                    ("tail", ["l"], EAp (EAp (EAp (EVar "CaseList") (EVar "l")) (EVar "K1")) (EVar "K1"))]
 
 applyToStats :: (TiStats -> TiStats) -> TiState -> TiState
 applyToStats f (stack, dump, heap, globals, stats) =
@@ -119,7 +124,6 @@ apStep (stack, dump, heap, globals, stats) a1 a2 =
                 heap' = hUpdate heap topAddr $ NAp a1 addr
                 (topAddr : addrs) = stack
         _ ->
-            --trace ("stack top: " ++ show a1)
             (a1 : stack, dump, heap, globals, stats)
 
 primStep :: TiState -> Name -> Primitive -> TiState
@@ -136,11 +140,62 @@ primStep state name Eq = primComp state (==)
 primStep state name Greater = primComp state (>)
 primStep state name GreaterEq = primComp state (>=)
 primStep state name PrimCasePair = primCasePair state
+primStep state name PrimCons = primCons state
+primStep state name PrimCaseList = primCaseList state
+
+
+primCons :: TiState -> TiState
+primCons (stack, dump, heap, globals, stats) =
+    case restNode of
+        (NData 4 _) ->
+            (stack', dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap a2 $ NData 4 [elemAddr, restAddr]
+                stack' = drop 2 stack
+        (NNum _) ->
+            error "Second argument to cons mustn't be a number"
+        _ ->
+            (stack', dump', heap, globals, stats)
+            where
+                stack' = [restAddr]
+                dump' = stack : dump
+    where
+        [a0, a1, a2] = take 3 stack
+        elemAddr = getArg heap a1
+        restAddr = getArg heap a2
+        restNode = hLookup heap restAddr
+
+primCaseList :: TiState -> TiState
+primCaseList (stack, dump, heap, globals, stats) =
+    case listNode of
+        (NData 4 []) ->
+            (stack', dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap a3 $ hLookup heap cnAddr
+                stack' = drop 3 stack
+        (NData 4 [x, xs]) ->
+            (stack', dump, heap3, globals, stats)
+            where
+                heap1 = hUpdate heap a1 $ hLookup heap ccAddr
+                heap2 = hUpdate heap1 a2 $ NAp a1 x
+                heap3 = hUpdate heap2 a3 $ NAp a2 xs
+                stack' = tail stack
+        _ ->
+            (stack', dump', heap, globals, stats)
+            where
+                stack' = [listAddr]
+                dump' = stack : dump
+    where
+        [a0, a1, a2, a3] = take 4 stack
+        listAddr = getArg heap a1
+        ccAddr = getArg heap a2
+        cnAddr = getArg heap a3
+        listNode = hLookup heap listAddr
 
 primCasePair :: TiState -> TiState
 primCasePair (stack, dump, heap, globals, stats) =
     case pairNode of
-        (NData 1 [arg1, arg2]) ->
+        (NData 3 [arg1, arg2]) ->
             (stack', dump, heap2, globals, stats)
             where
                 heap1 = hUpdate heap a1 $ NAp a0 arg1
