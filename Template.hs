@@ -141,12 +141,17 @@ primCasePair :: TiState -> TiState
 primCasePair (stack, dump, heap, globals, stats) =
     case pairNode of
         (NData 1 [arg1, arg2]) ->
-            (stack', dump, heap3, globals, stats)
+            (stack', dump, heap2, globals, stats)
             where
-                stack' = drop 2 stack
-                heap1 = hUpdate heap a0 $ hLookup heap funAddr
-                heap2 = hUpdate heap1 a1 $ NAp a0 arg1
-                heap3 = hUpdate heap2 a2 $ NAp a1 arg2
+                heap1 = hUpdate heap a1 $ NAp a0 arg1
+                heap2 = hUpdate heap1 a2 $ NAp a1 arg2
+                stack' = funAddr : (tail stack)
+        (NInd addr) ->
+            (stack, dump, heap', globals, stats)
+            where
+                heap' = hUpdate heap pairAddr $ hLookup heap addr
+        (NNum _) ->
+            error "CasePair's first argument should be a pair"
         _ ->
             (stack', dump', heap, globals, stats)
             where
