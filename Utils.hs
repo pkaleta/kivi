@@ -1,11 +1,7 @@
 module Utils where
 
 import Debug.Trace
-
-
-type Addr = Int
-type Assoc a b = [(a, b)]
-type Heap a = (Int, [Addr], Assoc Addr a)
+import Defs
 
 hInitial :: Heap a
 hInitial = (0, [1..], [])
@@ -16,7 +12,6 @@ hAlloc (size, addr : free, assoc) obj = ((size + 1, free, (addr, obj) : assoc), 
 hUpdate :: Heap a -> Addr -> a -> Heap a
 hUpdate (size, free, assoc) addr obj = (size, free, (addr, obj) : remove addr assoc)
 
--- what if addr was not present in the assoc?
 hFree :: Heap a -> Addr -> Heap a
 hFree (size, free, assoc) addr = (size, addr:free, remove addr assoc)
 

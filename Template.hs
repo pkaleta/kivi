@@ -6,45 +6,10 @@ import Utils
 import List
 import Core
 import Debug.Trace
+import Gc
+import Defs
 
-type TiState = (TiStack, TiDump, TiHeap, TiGlobals, TiStats, TiOutput)
-type TiStack = [Addr]
-type TiHeap = Heap Node
-type TiGlobals = Assoc Name Addr
-type TiStats = Int
-type TiOutput = [Int]
-
-type TiDump = [TiStack]
-
-data Node
-    = NAp Addr Addr
-    | NSc Name [Name] CoreExpr
-    | NNum Int
-    | NInd Addr
-    | NPrim Name Primitive
-    | NData Int [Addr]
-    | NIf Addr Addr Addr
-    deriving Show
-
-data Primitive = Neg
-               | Add
-               | Sub
-               | Mul
-               | Div
-               | PrimConstr Int Int
-               | If
-               | Greater
-               | GreaterEq
-               | Less
-               | LessEq
-               | Eq
-               | NotEq
-               | PrimCasePair
-               | PrimCaseList
-               | PrimCons
-               | Print
-               | Stop
-    deriving Show
+maxHeapSize = 100
 
 primitives :: Assoc Name Primitive
 primitives = [("negate", Neg),
@@ -118,7 +83,12 @@ eval state = state : restStates
         restStates | tiFinal state = []
                    | otherwise = eval nextState
         nextState = doAdmin $ step state
-        doAdmin = applyToStats tiStatIncSteps
+        doAdmin st = case hSize heap > maxHeapSize of
+            True -> gc newState
+            _ -> newState
+            where
+                newState = applyToStats tiStatIncSteps st
+                (_, _, heap, _, _, _) = newState
 
 step :: TiState -> TiState
 step state =
@@ -456,12 +426,6 @@ instantiate (ELet True defns body) heap env =
 -- constructors
 instantiate (EConstr tag arity) heap env =
     hAlloc heap $ NPrim "Pack" $ PrimConstr tag arity
---instantiate (EIf cond et ef) heap env =
---    hAlloc heap3 $ NIf condAddr etAddr efAddr
---    where
---        (heap1, condAddr) = instantiate cond heap env
---        (heap2, etAddr) = instantiate et heap1 env
---        (heap3, efAddr) = instantiate ef heap2 env
 -- case expressions
 instantiate (ECase expr alts)  heap env =
     error "Could not instantiate case expressions for the time being."

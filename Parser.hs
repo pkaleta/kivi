@@ -13,7 +13,6 @@ data Expr a
     | ELam [a] (Expr a)                     -- lambda abstractions
     deriving (Show)
 
-type Name = String
 type CoreExpr = Expr Name
 type IsRec = Bool
 type Alter a = (Int, [a], Expr a)
@@ -24,6 +23,8 @@ type ScDefn a = (Name, [a], Expr a)
 type CoreScDefn = ScDefn Name
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
+
+type Name = String
 
 isAtomicExpr :: Expr a -> Bool
 isAtomicExpr (EVar _) = True
