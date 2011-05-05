@@ -1,10 +1,7 @@
 module Utils where
 
 import Debug.Trace
-
-type Addr = Int
-type Assoc a b = [(a, b)]
-type Heap a = (Int, [Addr], Assoc Addr a)
+import Common
 
 hInitial :: Heap a
 hInitial = (0, [1..], [])
@@ -52,6 +49,9 @@ aLookup ((k, v) : xs) key def | k == key = v
 
 aDomain :: Assoc a b -> [a]
 aDomain xs = [k | (k, _) <- xs]
+
+aHasKey :: Eq a => Assoc a b -> a -> Bool
+aHasKey env k = k `elem` aDomain env
 
 aRange :: Assoc a b -> [b]
 aRange xs = [v | (_, v) <- xs]

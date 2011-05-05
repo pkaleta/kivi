@@ -2,29 +2,7 @@ module Parser where
 
 import Char
 import Lexer
-
-data Expr a
-    = EVar Name                             -- variables
-    | ENum Int                              -- numbers
-    | EConstr Int Int                       -- constructor (tag, arity)
-    | EAp (Expr a) (Expr a)                 -- applications
-    | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
-    | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
-    | ELam [a] (Expr a)                     -- lambda abstractions
-    deriving (Show)
-
-type CoreExpr = Expr Name
-type IsRec = Bool
-type Alter a = (Int, [a], Expr a)
-type CoreAlt = Alter Name
-type Program a = [ScDefn a]
-type CoreProgram = Program Name
-type ScDefn a = (Name, [a], Expr a)
-type CoreScDefn = ScDefn Name
-type Defn a = (a, Expr a)
-type CoreDefn = Defn Name
-
-type Name = String
+import Common
 
 isAtomicExpr :: Expr a -> Bool
 isAtomicExpr (EVar _) = True
