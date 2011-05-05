@@ -1,4 +1,4 @@
-module GMachinewhere
+module GMEvaluator where
 
 --import Lexer
 import Parser
@@ -7,7 +7,6 @@ import List
 --import Core
 import Debug.Trace
 --import Gc
-import Defs
 
 type GmState = (GmCode,
                 GmStack,
@@ -67,7 +66,7 @@ putHeap heap' (code, stack, heap, globals, stats) = (code, stack, heap', globals
 getGlobals :: GmState -> GmGlobals
 getGlobals (code, stack, heap, globals, stats) = globals
 
-getStats :: GmState -> Gm
+getStats :: GmState -> GmStats
 getStats (code, stack, heap, globals, stats) = stats
 
 putStats :: GmStats -> GmState -> GmState
@@ -82,6 +81,9 @@ statGetSteps s = s
 statIncSteps :: GmStats -> GmStats
 statIncSteps s = s+1
 
+--run :: [Char] -> [Char]
+--run = showResults . eval . compile . parse
+
 eval :: GmState -> [GmState]
 eval state = state : restStates
     where
@@ -90,13 +92,13 @@ eval state = state : restStates
         nextState = doAdmin $ step state
 
 doAdmin :: GmState -> GmState
-doAdmin state = putStats $ statIncSteps $ getStats state
+doAdmin state = putStats (statIncSteps $ getStats state) state
 
 gmFinal :: GmState -> Bool
 gmFinal state =
     case getCode state of
-        [] = True
-        _ = False
+        [] -> True
+        _ -> False
 
 step :: GmState -> GmState
 step state =
@@ -122,33 +124,37 @@ pushint :: Int -> GmState -> GmState
 pushint n state =
     putStack stack' $ putHeap heap' state
     where
-        (heap', addr) = hAlloc heap $ NNum n
-        stack' = addr : stack
+        (heap', addr) = hAlloc (getHeap state) $ NNum n
+        stack' = addr : getStack state
 
 mkap :: GmState -> GmState
 mkap state =
     putStack (addr : addrs) $ putHeap heap' state
     where
-        (heap', addr) = hAlloc (getHeap stack) $ NAp a1 a2
+        (heap', addr) = hAlloc (getHeap state) $ NAp a1 a2
         (a1 : a2 : addrs) = getStack state
 
 push :: Int -> GmState -> GmState
 push n state =
     putStack stack' state
     where
-        stack' = argAddr : (getStack state)
-        argAddr = getArg $ hLookup (getHeap state) (stack !! n + 1)
+        stack' = argAddr : stack
+        argAddr = getArg $ hLookup (getHeap state) (stack !! (n + 1))
+        stack = getStack state
 
-getArg :: GmStack -> Int
+getArg :: Node -> Addr
 getArg (NAp a1 a2) = a2
 
-slide :: Int -> GmState
-slide n state = putStack $ a : drop n as
+slide :: Int -> GmState -> GmState
+slide n state = putStack (a : drop n as) state
     where
         (a : as) = getStack state
 
 unwind :: GmState -> GmState
-unwind state = newState $ hLookup (getHeap state) (head $ getStack state)
+unwind state = newState (hLookup heap addr) state
+    where
+        heap = getHeap state
+        addr = head $ getStack state
 
 newState :: Node -> GmState -> GmState
 newState (NNum n) state = state
@@ -217,8 +223,6 @@ newState (NGlobal argc code) state =
 --applyToStats f (stack, dump, heap, globals, stats, output) =
 --    (stack, dump, heap, globals, f stats, output)
 --
-run :: [Char] -> [Char]
-run = showResults . eval . compile . parse
 --
 --compile :: CoreProgram -> TiState
 --compile program = (stack, tiDumpInitial, heap, globals, tiStatInitial, tiOutputInitial)
