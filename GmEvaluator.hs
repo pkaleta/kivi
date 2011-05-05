@@ -10,12 +10,28 @@ import Debug.Trace
 import GmCompiler
 --import Gc
 
+
+compiledPrimitives :: [GmCompiledSc]
+compiledPrimitives = []
+
 run :: [Char] -> [Char]
 run = showResults . eval . compile . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
-showResults (state : states) = show (getCode state) ++ " | " ++ show (getStack state) ++ "\n" ++ showResults states
+showResults (state : states) =
+    case length stack > 0 of
+        True ->
+            show code ++ ", " ++ show stack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
+            where
+                topNode = (hLookup heap topAddr)
+                topAddr = head $ getStack state
+        False ->
+            show code ++ ", " ++ show stack ++ "\n\n" ++ showResults states
+    where
+        code = getCode state
+        stack = getStack state
+        heap = getHeap state
 
 eval :: GmState -> [GmState]
 eval state = state : restStates
