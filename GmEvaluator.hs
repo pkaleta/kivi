@@ -13,8 +13,9 @@ import GmCompiler
 run :: [Char] -> [Char]
 run = showResults . eval . compile . parse
 
-showResults :: [GmState] -> String
-showResults (state : states) = show state ++ showResults states
+showResults :: [GmState] -> [Char]
+showResults [] = ""
+showResults (state : states) = show (getCode state) ++ " | " ++ show (getStack state) ++ "\n" ++ showResults states
 
 eval :: GmState -> [GmState]
 eval state = state : restStates
