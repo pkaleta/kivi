@@ -61,6 +61,9 @@ putStack stack' (code, stack, heap, globals, stats) = (code, stack', heap, globa
 getHeap :: GmState -> GmHeap
 getHeap (code, stack, heap, globals, stats) = heap
 
+putHeap :: GmHeap -> GmState -> GmState
+putHeap heap' (code, stack, heap, globals, stats) = (code, stack, heap', globals, stats)
+
 getGlobals :: GmState -> GmGlobals
 getGlobals (code, stack, heap, globals, stats) = globals
 
@@ -97,11 +100,65 @@ gmFinal state =
 
 step :: GmState -> GmState
 step state =
-    dispatch i (putCode is)
+    dispatch i $ putCode is state
     where
         (i : is) = getCode state
 
 dispatch :: Instruction -> GmState -> GmState
+dispatch Unwind         = unwind
+dispatch (Pushglobal f) = pushglobal f
+dispatch (Pushint n)    = pushint n
+dispatch (Push n)       = push n
+dispatch Mkap           = mkap
+dispatch (Slide n)      = slide n
+
+pushglobal :: Name -> GmState -> GmState
+pushglobal name state =
+    putStack (addr : getStack state) state
+    where
+        addr = aLookup (getGlobals state) name $ error $ "Undeclared global identifier: " ++ name
+
+pushint :: Int -> GmState -> GmState
+pushint n state =
+    putStack stack' $ putHeap heap' state
+    where
+        (heap', addr) = hAlloc heap $ NNum n
+        stack' = addr : stack
+
+mkap :: GmState -> GmState
+mkap state =
+    putStack (addr : addrs) $ putHeap heap' state
+    where
+        (heap', addr) = hAlloc (getHeap stack) $ NAp a1 a2
+        (a1 : a2 : addrs) = getStack state
+
+push :: Int -> GmState -> GmState
+push n state =
+    putStack stack' state
+    where
+        stack' = argAddr : (getStack state)
+        argAddr = getArg $ hLookup (getHeap state) (stack !! n + 1)
+
+getArg :: GmStack -> Int
+getArg (NAp a1 a2) = a2
+
+slide :: Int -> GmState
+slide n state = putStack $ a : drop n as
+    where
+        (a : as) = getStack state
+
+unwind :: GmState -> GmState
+unwind state = newState $ hLookup (getHeap state) (head $ getStack state)
+
+newState :: Node -> GmState -> GmState
+newState (NNum n) state = state
+newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
+newState (NGlobal argc code) state =
+    case argc > length args of
+        True -> error "Not enought arguments on the stack"
+        False -> putCode code state
+    where
+        (a : args) = getStack state
 
 --maxHeapSize = 100
 --
