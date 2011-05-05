@@ -1,6 +1,6 @@
 module Core where
 
-import Parser
+import Common
 
 preludeDefs :: CoreProgram
 preludeDefs = [("I", ["x"], EVar "x"),

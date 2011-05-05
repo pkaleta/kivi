@@ -4,6 +4,7 @@ import Common
 import Parser
 import Utils
 import List
+import Core
 
 type GmCompiledSc = (Name, Int, GmCode)
 type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
@@ -21,7 +22,7 @@ buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
 buildInitialHeap program =
     mapAccumL allocateSc hInitial compiled
     where
-        compiled = map compileSc program
+        compiled = map compileSc $ program ++ preludeDefs
 
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
 allocateSc heap (name, argc, code) = (heap', (name, addr))
