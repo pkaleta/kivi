@@ -101,11 +101,8 @@ push n state =
     putStack stack' state
     where
         stack' = argAddr : stack
-        argAddr = getArg $ hLookup (getHeap state) (stack !! (n + 1))
+        argAddr = stack !! n
         stack = getStack state
-
-getArg :: Node -> Addr
-getArg (NAp a1 a2) = a2
 
 update :: Int -> GmState -> GmState
 update n state = putStack as $ putHeap heap' state
@@ -123,16 +120,26 @@ unwind state = newState (hLookup heap addr) state
         heap = getHeap state
         addr = head $ getStack state
 
+getArg :: Node -> Addr
+getArg (NAp a1 a2) = a2
+
 newState :: Node -> GmState -> GmState
 newState (NNum n) state = state
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
 newState (NGlobal argc code) state =
-    case argc > length args of
-        True -> error "Not enought arguments on the stack"
-        False -> putCode code state
+    case argc > length stack - 1 of
+        True -> error "Not enough arguments on the stack"
+        False -> putCode code $ putStack (rearrange argc heap stack) state
     where
-        (a : args) = getStack state
+        stack = getStack state
+        heap = getHeap state
 newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
     where
         stack' = addr : (tail $ getStack state)
+
+rearrange :: Int -> GmHeap -> GmStack -> GmStack
+rearrange n heap stack =
+    addrs ++ drop n stack
+    where
+        addrs = map (getArg . hLookup heap) (take n $ tail stack)
 
