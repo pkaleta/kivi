@@ -61,7 +61,8 @@ dispatch (Pushglobal f) = pushglobal f
 dispatch (Pushint n)    = pushint n
 dispatch (Push n)       = push n
 dispatch Mkap           = mkap
-dispatch (Slide n)      = slide n
+dispatch (Update n)     = update n
+dispatch (Pop n)        = pop n
 
 pushglobal :: Name -> GmState -> GmState
 pushglobal name state =
@@ -106,10 +107,15 @@ push n state =
 getArg :: Node -> Addr
 getArg (NAp a1 a2) = a2
 
-slide :: Int -> GmState -> GmState
-slide n state = putStack (a : drop n as) state
+update :: Int -> GmState -> GmState
+update n state = putStack as $ putHeap heap' state
     where
-        (a : as) = getStack state
+        heap' = hUpdate (getHeap state) redexRoot $ NInd a
+        redexRoot = as !! n
+        a : as = getStack state
+
+pop :: Int -> GmState -> GmState
+pop n state = putStack (drop n $ getStack state) state
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -126,4 +132,7 @@ newState (NGlobal argc code) state =
         False -> putCode code state
     where
         (a : args) = getStack state
+newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
+    where
+        stack' = addr : (tail $ getStack state)
 

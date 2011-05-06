@@ -34,7 +34,9 @@ compileSc (name, args, expr) =
     (name, length args, compileR expr $ zip args [0..])
 
 compileR :: GmCompiler
-compileR expr env = compileC expr env ++ [Slide $ length env + 1, Unwind]
+compileR expr env = compileC expr env ++ [Update n, Pop n, Unwind]
+    where
+        n = length env
 
 compileC :: GmCompiler
 compileC (EVar v) env =

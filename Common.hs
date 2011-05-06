@@ -43,7 +43,8 @@ data Instruction = Unwind
                  | Pushint Int
                  | Push Int
                  | Mkap
-                 | Slide Int
+                 | Update Int
+                 | Pop Int
     deriving Show
 
 instance Eq Instruction
@@ -53,16 +54,18 @@ instance Eq Instruction
         Pushint a == Pushint b = a == b
         Push a == Push b = a == b
         Mkap == Mkap = True
-        Slide a == Slide b = a == b
+        Update a == Update b = a == b
+        Pop a == Pop b = a == b
         _ == _ = False
 
 type GmStack = [Addr]
 
 type GmHeap = Heap Node
 
-data Node = NNum Int
-          | NAp Addr Addr
-          | NGlobal Int GmCode
+data Node = NNum Int            -- numbers
+          | NAp Addr Addr       -- applications
+          | NGlobal Int GmCode  -- global names (functions, numbers, variables, etc.)
+          | NInd Addr           -- indirection nodes (updating the root of redex)
     deriving Show
 
 type GmGlobals = Assoc Name Addr
