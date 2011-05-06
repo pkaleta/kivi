@@ -71,10 +71,22 @@ pushglobal name state =
 
 pushint :: Int -> GmState -> GmState
 pushint n state =
-    putStack stack' $ putHeap heap' state
+    case aLookup globals numStr (-1) of
+        -1 ->
+            putStack stack' $ putHeap heap' $ putGlobals globals' state
+            where
+                (heap', addr) = hAlloc heap $ NNum n
+                stack' = addr : stack
+                globals' = (numStr, addr) : globals
+        addr ->
+            putStack stack' state
+            where
+                stack' = addr : stack
     where
-        (heap', addr) = hAlloc (getHeap state) $ NNum n
-        stack' = addr : getStack state
+        heap = getHeap state
+        stack = getStack state
+        globals = getGlobals state
+        numStr = show n
 
 mkap :: GmState -> GmState
 mkap state =

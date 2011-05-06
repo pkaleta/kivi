@@ -90,6 +90,9 @@ putHeap heap' (code, stack, heap, globals, stats) = (code, stack, heap', globals
 getGlobals :: GmState -> GmGlobals
 getGlobals (code, stack, heap, globals, stats) = globals
 
+putGlobals :: GmGlobals -> GmState -> GmState
+putGlobals globals' (code, stack, heap, globals, stats) = (code, stack, heap, globals', stats)
+
 getStats :: GmState -> GmStats
 getStats (code, stack, heap, globals, stats) = stats
 
