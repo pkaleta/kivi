@@ -49,12 +49,12 @@ compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
---compileC (ELet true defs body) env = compileLetrec defs body env
-compileC (ELet false defs body) env = compileLet defs body env
+compileC (ELet isRec defs body) env | isRec = compileLetrec defs body env
+                                    | otherwise = compileLet defs body env
 
 compileLet :: [(Name, CoreExpr)] -> GmCompiler
 compileLet defs body env =
-    trace ("**********************" ++ show (env')) compileDefs defs env ++ compileC body env' ++ [Slide $ length defs]
+    compileDefs defs env ++ compileC body env' ++ [Slide $ length defs]
     where
         env' = compileArgs defs env
 
@@ -69,8 +69,17 @@ compileArgs defs env =
     where
         n = length defs
 
---compileLetrec :: [(Name, Expr)] -> GmCompiler
---compileLetrec defs body env
+compileLetrec :: [(Name, CoreExpr)] -> GmCompiler
+compileLetrec defs body env =
+    [Alloc n] ++ compileRecDefs n defs env' ++ compileC body env' ++ [Slide n]
+    where
+        n = length defs
+        env' = compileArgs defs env
+
+compileRecDefs :: Int -> [(Name, CoreExpr)] -> GmEnvironment -> GmCode
+compileRecDefs 0 [] env = []
+compileRecDefs n ((name, expr) : defs) env =
+        compileC expr env ++ [Update $ n - 1] ++ compileRecDefs (n - 1) defs env
 
 argOffset :: Int -> GmEnvironment -> GmEnvironment
 argOffset n env = map (\(name, pos) -> (name, pos + n)) env
