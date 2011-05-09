@@ -63,6 +63,28 @@ dispatch (Push n)       = push n
 dispatch Mkap           = mkap
 dispatch (Update n)     = update n
 dispatch (Pop n)        = pop n
+dispatch (Slide n)      = slide n
+dispatch (Alloc n)      = alloc n
+
+unwind :: GmState -> GmState
+unwind state = newState (hLookup heap addr) state
+    where
+        heap = getHeap state
+        addr = head $ getStack state
+
+newState :: Node -> GmState -> GmState
+newState (NNum n) state = state
+newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
+newState (NGlobal argc code) state =
+    case argc > length stack - 1 of
+        True -> error "Not enough arguments on the stack"
+        False -> putCode code $ putStack (rearrange argc heap stack) state
+    where
+        stack = getStack state
+        heap = getHeap state
+newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
+    where
+        stack' = addr : (tail $ getStack state)
 
 pushglobal :: Name -> GmState -> GmState
 pushglobal name state =
@@ -114,28 +136,26 @@ update n state = putStack as $ putHeap heap' state
 pop :: Int -> GmState -> GmState
 pop n state = putStack (drop n $ getStack state) state
 
-unwind :: GmState -> GmState
-unwind state = newState (hLookup heap addr) state
+slide :: Int -> GmState -> GmState
+slide n state = putStack (a : drop n as) state
     where
-        heap = getHeap state
-        addr = head $ getStack state
+        (a : as) = getStack state
+
+alloc :: Int -> GmState -> GmState
+alloc n state = putStack stack' $ putHeap heap' state
+    where
+        (heap', as) = allocNodes n $ getHeap state
+        stack' = as ++ (getStack state)
+
+allocNodes :: Int -> GmHeap -> (GmHeap, [Addr])
+allocNodes 0 heap = (heap, [])
+allocNodes n heap = (heap1, a : as)
+    where
+        (heap0, as) = allocNodes (n - 1) heap
+        (heap1, a) = hAlloc heap0 $ NInd hNull
 
 getArg :: Node -> Addr
 getArg (NAp a1 a2) = a2
-
-newState :: Node -> GmState -> GmState
-newState (NNum n) state = state
-newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
-newState (NGlobal argc code) state =
-    case argc > length stack - 1 of
-        True -> error "Not enough arguments on the stack"
-        False -> putCode code $ putStack (rearrange argc heap stack) state
-    where
-        stack = getStack state
-        heap = getHeap state
-newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
-    where
-        stack' = addr : (tail $ getStack state)
 
 rearrange :: Int -> GmHeap -> GmStack -> GmStack
 rearrange n heap stack =

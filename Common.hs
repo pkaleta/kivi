@@ -45,6 +45,8 @@ data Instruction = Unwind
                  | Mkap
                  | Update Int
                  | Pop Int
+                 | Slide Int
+                 | Alloc Int
     deriving Show
 
 instance Eq Instruction
@@ -56,6 +58,8 @@ instance Eq Instruction
         Mkap == Mkap = True
         Update a == Update b = a == b
         Pop a == Pop b = a == b
+        Slide a == Slide b = a == b
+        Alloc a == Alloc b = a == b
         _ == _ = False
 
 type GmStack = [Addr]

@@ -5,6 +5,7 @@ import Parser
 import Utils
 import List
 import Core
+import Debug.Trace
 
 type GmCompiledSc = (Name, Int, GmCode)
 type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
@@ -48,7 +49,29 @@ compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
+--compileC (ELet true defs body) env = compileLetrec defs body env
+compileC (ELet false defs body) env = compileLet defs body env
 
-argOffset :: Int -> Assoc Name Int -> Assoc Name Int
+compileLet :: [(Name, CoreExpr)] -> GmCompiler
+compileLet defs body env =
+    trace ("**********************" ++ show (env')) compileDefs defs env ++ compileC body env' ++ [Slide $ length defs]
+    where
+        env' = compileArgs defs env
+
+compileDefs :: [(Name, CoreExpr)] -> GmEnvironment -> GmCode
+compileDefs [] env = []
+compileDefs ((name, expr) : defs) env =
+    compileC expr env ++ (compileDefs defs $ argOffset 1 env)
+
+compileArgs :: [(Name, CoreExpr)] -> GmEnvironment -> GmEnvironment
+compileArgs defs env =
+    zip (map fst defs) [n-1, n-2 .. 0] ++ argOffset n env
+    where
+        n = length defs
+
+--compileLetrec :: [(Name, Expr)] -> GmCompiler
+--compileLetrec defs body env
+
+argOffset :: Int -> GmEnvironment -> GmEnvironment
 argOffset n env = map (\(name, pos) -> (name, pos + n)) env
 
