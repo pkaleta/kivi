@@ -19,7 +19,7 @@ showResults [] = ""
 showResults (state : states) =
     case length stack > 0 of
         True ->
-            show code ++ ", " ++ show stack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
+            show stats ++ ": " ++ show code ++ ", " ++ show stack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
             where
                 topNode = (hLookup heap topAddr)
                 topAddr = head $ getStack state
@@ -29,6 +29,7 @@ showResults (state : states) =
         code = getCode state
         stack = getStack state
         heap = getHeap state
+        stats = getStats state
 
 eval :: GmState -> [GmState]
 eval state = state : restStates
