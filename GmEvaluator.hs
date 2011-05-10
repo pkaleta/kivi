@@ -12,7 +12,18 @@ import GmCompiler
 
 
 compiledPrimitives :: [GmCompiledSc]
-compiledPrimitives = []
+compiledPrimitives = [("+", 2, [Push 1, Eval, Push 1, Eval, Add, Update 2, Pop 2, Unwind]),
+                      ("-", 2, [Push 1, Eval, Push 1, Eval, Sub, Update 2, Pop 2, Unwind]),
+                      ("*", 2, [Push 1, Eval, Push 1, Eval, Mul, Update 2, Pop 2, Unwind]),
+                      ("/", 2, [Push 1, Eval, Push 1, Eval, Div, Update 2, Pop 2, Unwind]),
+                      ("negate", 1, [Push 0, Eval, Neg, Update 1, Pop 1, Unwind]),
+                      ("==", 2, [Push 1, Eval, Push 1, Eval, Eq, Update 2, Pop 2, Unwind]),
+                      ("!=", 2, [Push 1, Eval, Push 1, Eval, Ne, Update 2, Pop 2, Unwind]),
+                      ("<", 2, [Push 1, Eval, Push 1, Eval, Lt, Update 2, Pop 2, Unwind]),
+                      ("<=", 2, [Push 1, Eval, Push 1, Eval, Le, Update 2, Pop 2, Unwind]),
+                      (">", 2, [Push 1, Eval, Push 1, Eval, Gt, Update 2, Pop 2, Unwind]),
+                      (">=", 2, [Push 1, Eval, Push 1, Eval, Ge, Update 2, Pop 2, Unwind]),
+                      ("if", 3, [Push 0, Eval, Cond [Push 1] [Push 2], Update 3, Pop 3, Unwind])]
 
 run :: [Char] -> [Char]
 run = showResults . eval . compile . parse
@@ -71,7 +82,13 @@ dispatch Sub            = sub
 dispatch Mul            = mul
 dispatch Div            = div2
 dispatch Neg            = neg
-dispatch (Cond i1 i2)     = cond i1 i2
+dispatch Eq             = eq
+dispatch Ne             = ne
+dispatch Lt             = lt
+dispatch Le             = le
+dispatch Gt             = gt
+dispatch Ge             = ge
+dispatch (Cond i1 i2)   = cond i1 i2
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -188,6 +205,24 @@ div2 = arithmetic2 (div)
 
 neg :: GmState -> GmState
 neg = arithmetic1 negate
+
+eq :: GmState -> GmState
+eq = relational2 (==)
+
+ne :: GmState -> GmState
+ne = relational2 (/=)
+
+lt :: GmState -> GmState
+lt = relational2 (<)
+
+le :: GmState -> GmState
+le = relational2 (<=)
+
+gt :: GmState -> GmState
+gt = relational2 (>)
+
+ge :: GmState -> GmState
+ge = relational2 (>=)
 
 cond :: GmCode -> GmCode -> GmState -> GmState
 cond i1 i2 state =

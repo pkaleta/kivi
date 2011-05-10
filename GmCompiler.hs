@@ -17,7 +17,7 @@ compile program = (initialCode, [], [], heap, globals, initialStats)
         (heap, globals) = buildInitialHeap program
 
 initialCode :: GmCode
-initialCode = [Pushglobal "main", Unwind]
+initialCode = [Pushglobal "main", Eval]
 
 buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
 buildInitialHeap program =
