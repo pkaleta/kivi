@@ -32,6 +32,7 @@ type Name = String
 -- GmEvaluator
 type GmState = (GmCode,
                 GmStack,
+                GmDump,
                 GmHeap,
                 GmGlobals,
                 GmStats)
@@ -47,6 +48,10 @@ data Instruction = Unwind
                  | Pop Int
                  | Slide Int
                  | Alloc Int
+                 | Eval
+                 | Add | Sub | Mul | Div | Neg
+                 | Eq | Ne | Lt | Le | Gt | Ge
+                 | Cond GmCode GmCode
     deriving Show
 
 instance Eq Instruction
@@ -64,6 +69,10 @@ instance Eq Instruction
 
 type GmStack = [Addr]
 
+type GmDump = [GmDumpItem]
+
+type GmDumpItem = (GmCode, GmStack)
+
 type GmHeap = Heap Node
 
 data Node = NNum Int            -- numbers
@@ -77,34 +86,40 @@ type GmGlobals = Assoc Name Addr
 type GmStats = Int
 
 getCode :: GmState -> GmCode
-getCode (code, stack, heap, globals, stats) = code
+getCode (code, stack, dump, heap, globals, stats) = code
 
 putCode :: GmCode -> GmState -> GmState
-putCode code' (code, stack, heap, globals, stats) = (code', stack, heap, globals, stats)
+putCode code' (code, stack, dump, heap, globals, stats) = (code', stack, dump, heap, globals, stats)
 
 getStack :: GmState -> GmStack
-getStack (code, stack, heap, globals, stats) = stack
+getStack (code, stack, dump, heap, globals, stats) = stack
 
 putStack :: GmStack -> GmState -> GmState
-putStack stack' (code, stack, heap, globals, stats) = (code, stack', heap, globals, stats)
+putStack stack' (code, stack, dump, heap, globals, stats) = (code, stack', dump, heap, globals, stats)
+
+getDump :: GmState -> GmDump
+getDump (code, stack, dump, heap, globals, stats) = dump
+
+putDump :: GmDump -> GmState -> GmState
+putDump dump' (code, stack, dump, heap, globals, stats) = (code, stack, dump', heap, globals, stats)
 
 getHeap :: GmState -> GmHeap
-getHeap (code, stack, heap, globals, stats) = heap
+getHeap (code, stack, dump, heap, globals, stats) = heap
 
 putHeap :: GmHeap -> GmState -> GmState
-putHeap heap' (code, stack, heap, globals, stats) = (code, stack, heap', globals, stats)
+putHeap heap' (code, stack, dump, heap, globals, stats) = (code, stack, dump, heap', globals, stats)
 
 getGlobals :: GmState -> GmGlobals
-getGlobals (code, stack, heap, globals, stats) = globals
+getGlobals (code, stack, dump, heap, globals, stats) = globals
 
 putGlobals :: GmGlobals -> GmState -> GmState
-putGlobals globals' (code, stack, heap, globals, stats) = (code, stack, heap, globals', stats)
+putGlobals globals' (code, stack, dump, heap, globals, stats) = (code, stack, dump, heap, globals', stats)
 
 getStats :: GmState -> GmStats
-getStats (code, stack, heap, globals, stats) = stats
+getStats (code, stack, dump, heap, globals, stats) = stats
 
 putStats :: GmStats -> GmState -> GmState
-putStats stats' (code, stack, heap, globals, stats) = (code, stack, heap, globals, stats')
+putStats stats' (code, stack, dump, heap, globals, stats) = (code, stack, dump, heap, globals, stats')
 
 initialStats :: GmStats
 initialStats = 0

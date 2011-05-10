@@ -12,7 +12,7 @@ type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
 compile :: CoreProgram -> GmState
-compile program = (initialCode, [], heap, globals, initialStats)
+compile program = (initialCode, [], [], heap, globals, initialStats)
     where
         (heap, globals) = buildInitialHeap program
 

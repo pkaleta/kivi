@@ -65,6 +65,13 @@ dispatch (Update n)     = update n
 dispatch (Pop n)        = pop n
 dispatch (Slide n)      = slide n
 dispatch (Alloc n)      = alloc n
+dispatch Eval           = eval2
+dispatch Add            = add
+dispatch Sub            = sub
+dispatch Mul            = mul
+dispatch Div            = div2
+dispatch Neg            = neg
+dispatch (Cond i1 i2)     = cond i1 i2
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -73,7 +80,12 @@ unwind state = newState (hLookup heap addr) state
         addr = head $ getStack state
 
 newState :: Node -> GmState -> GmState
-newState (NNum n) state = state
+newState (NNum n) state =
+    putCode code $ putStack (addr : stack) $ putDump ds state
+    where
+        d : ds = getDump state
+        (code, stack) = d
+        addr = head $ getStack state
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
 newState (NGlobal argc code) state =
     case argc > length stack - 1 of
@@ -154,6 +166,39 @@ allocNodes n heap = (heap1, a : as)
         (heap0, as) = allocNodes (n - 1) heap
         (heap1, a) = hAlloc heap0 $ NInd hNull
 
+eval2 :: GmState -> GmState
+eval2 state =
+    putCode [Unwind] $ putStack [a] $ putDump dump' state
+    where
+        dump' = (code, as) : getDump state
+        code = getCode state
+        (a : as) = getStack state
+
+add :: GmState -> GmState
+add = arithmetic2 (+)
+
+sub :: GmState -> GmState
+sub = arithmetic2 (-)
+
+mul :: GmState -> GmState
+mul = arithmetic2 (*)
+
+div2 :: GmState -> GmState
+div2 = arithmetic2 (div)
+
+neg :: GmState -> GmState
+neg = arithmetic1 negate
+
+cond :: GmCode -> GmCode -> GmState -> GmState
+cond i1 i2 state =
+    putCode code' $ putStack as state
+    where
+        code = getCode state
+        (a : as) = getStack state
+        code' = case hLookup (getHeap state) a of
+            (NNum 1) -> i1 ++ code
+            (NNum 0) -> i2 ++ code
+
 getArg :: Node -> Addr
 getArg (NAp a1 a2) = a2
 
@@ -162,4 +207,62 @@ rearrange n heap stack =
     addrs ++ drop n stack
     where
         addrs = map (getArg . hLookup heap) (take n $ tail stack)
+
+boxInteger :: Int -> GmState -> GmState
+boxInteger n state =
+    putStack (addr : stack) $ putHeap heap state
+    where
+        (heap, addr) = hAlloc (getHeap state) $ NNum n
+        stack = getStack state
+
+unboxInteger :: Addr -> GmState -> Int
+unboxInteger addr state =
+    case hLookup (getHeap state) addr of
+        (NNum n) -> n
+        _ -> error "Trying to unbox value other than integer"
+
+boxBoolean :: Bool -> GmState -> GmState
+boxBoolean b state =
+    putStack (addr : stack) $ putHeap heap state
+    where
+        stack = getStack state
+        (heap, addr) = hAlloc (getHeap state) $ NNum b'
+        b' | b = 1
+           | otherwise = 0
+
+unboxBoolean :: Addr -> GmState -> Bool
+unboxBoolean addr state =
+    case hLookup (getHeap state) addr of
+        (NNum 0) -> False
+        (NNum 1) -> True
+        _ -> error "Trying to unbox value other than boolean"
+
+primitive1 :: (b -> GmState -> GmState) ->
+              (Addr -> GmState -> a) ->
+              (a -> b) ->
+              (GmState -> GmState)
+primitive1 box unbox op state =
+    box (op (unbox a state)) (putStack as state)
+    where
+        (a : as) = getStack state
+
+primitive2 :: (b -> GmState -> GmState) ->
+              (Addr -> GmState -> a) ->
+              (a -> a -> b) ->
+              (GmState -> GmState)
+primitive2 box unbox op state =
+    box (op a1 a2) (putStack as state)
+    where
+        a1 = unbox addr1 state
+        a2 = unbox addr2 state
+        (addr1 : addr2 : as) = getStack state
+
+arithmetic1 :: (Int -> Int) -> (GmState -> GmState)
+arithmetic1 = primitive1 boxInteger unboxInteger
+
+arithmetic2 :: (Int -> Int -> Int) -> (GmState -> GmState)
+arithmetic2 = primitive2 boxInteger unboxInteger
+
+relational2 :: (Int -> Int -> Bool) -> (GmState -> GmState)
+relational2 = primitive2 boxBoolean unboxInteger
 
