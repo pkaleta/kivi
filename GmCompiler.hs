@@ -11,6 +11,20 @@ type GmCompiledSc = (Name, Int, GmCode)
 type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
+compiledPrimitives :: [GmCompiledSc]
+compiledPrimitives = [("+", 2, [Push 1, Eval, Push 1, Eval, Add, Update 2, Pop 2, Unwind]),
+                      ("-", 2, [Push 1, Eval, Push 1, Eval, Sub, Update 2, Pop 2, Unwind]),
+                      ("*", 2, [Push 1, Eval, Push 1, Eval, Mul, Update 2, Pop 2, Unwind]),
+                      ("/", 2, [Push 1, Eval, Push 1, Eval, Div, Update 2, Pop 2, Unwind]),
+                      ("negate", 1, [Push 0, Eval, Neg, Update 1, Pop 1, Unwind]),
+                      ("==", 2, [Push 1, Eval, Push 1, Eval, Eq, Update 2, Pop 2, Unwind]),
+                      ("!=", 2, [Push 1, Eval, Push 1, Eval, Ne, Update 2, Pop 2, Unwind]),
+                      ("<", 2, [Push 1, Eval, Push 1, Eval, Lt, Update 2, Pop 2, Unwind]),
+                      ("<=", 2, [Push 1, Eval, Push 1, Eval, Le, Update 2, Pop 2, Unwind]),
+                      (">", 2, [Push 1, Eval, Push 1, Eval, Gt, Update 2, Pop 2, Unwind]),
+                      (">=", 2, [Push 1, Eval, Push 1, Eval, Ge, Update 2, Pop 2, Unwind]),
+                      ("if", 3, [Push 0, Eval, Cond [Push 1] [Push 2], Update 3, Pop 3, Unwind])]
+
 compile :: CoreProgram -> GmState
 compile program = (initialCode, [], [], heap, globals, initialStats)
     where
@@ -21,7 +35,7 @@ initialCode = [Pushglobal "main", Eval]
 
 buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
 buildInitialHeap program =
-    mapAccumL allocateSc hInitial compiled
+    mapAccumL allocateSc hInitial (compiled ++ compiledPrimitives)
     where
         compiled = map compileSc $ program ++ preludeDefs
 
