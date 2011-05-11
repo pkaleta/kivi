@@ -144,14 +144,14 @@ pExpr =
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
     pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
-    pThen4 mkIfExpr (pLit "if") pExpr pExpr pExpr `pOr`
+--    pThen4 mkIfExpr (pLit "if") pExpr pExpr pExpr `pOr`
     pOrExpr `pOr`
     pAtomicExpr
     where
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
         mkLambdaExpr _ vars _ expr = ELam vars expr
-        mkIfExpr _ cond et ef = EIf cond et ef
+--        mkIfExpr _ cond et ef = EIf cond et ef
 
 pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =

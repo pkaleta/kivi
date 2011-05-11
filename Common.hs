@@ -14,7 +14,7 @@ data Expr a
     | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
-    | EIf (Expr a) (Expr a) (Expr a)        -- if expression
+--    | EIf (Expr a) (Expr a) (Expr a)        -- if expression
     deriving (Show)
 
 type CoreExpr = Expr Name

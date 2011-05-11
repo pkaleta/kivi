@@ -22,8 +22,9 @@ compiledPrimitives = [("+", 2, [Push 1, Eval, Push 1, Eval, Add, Update 2, Pop 2
                       ("<", 2, [Push 1, Eval, Push 1, Eval, Lt, Update 2, Pop 2, Unwind]),
                       ("<=", 2, [Push 1, Eval, Push 1, Eval, Le, Update 2, Pop 2, Unwind]),
                       (">", 2, [Push 1, Eval, Push 1, Eval, Gt, Update 2, Pop 2, Unwind]),
-                      (">=", 2, [Push 1, Eval, Push 1, Eval, Ge, Update 2, Pop 2, Unwind]),
-                      ("if", 3, [Push 0, Eval, Cond [Push 1] [Push 2], Update 3, Pop 3, Unwind])]
+                      (">=", 2, [Push 1, Eval, Push 1, Eval, Ge, Update 2, Pop 2, Unwind])
+                      --, ("if", 3, [Push 0, Eval, Cond [Push 1] [Push 2], Update 3, Pop 3, Unwind])
+                      ]
 
 builtinDyadic :: Assoc Name Instruction
 builtinDyadic = [("+", Add),
@@ -72,8 +73,8 @@ compileE (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
 compileE (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD alts env]
-compileE (EIf cond et ef) env =
-    (compileE cond env) ++ [Cond (compileE et env) (compileE ef env)]
+--compileE (EIf cond et ef) env =
+--    (compileE cond env) ++ [Cond (compileE et env) (compileE ef env)]
 compileE (EAp (EAp (EVar name) e1) e2) env =
     compileE e2 env ++
     compileE e1 (argOffset 1 env) ++

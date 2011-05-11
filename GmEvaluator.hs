@@ -76,7 +76,7 @@ dispatch Lt             = lt
 dispatch Le             = le
 dispatch Gt             = gt
 dispatch Ge             = ge
-dispatch (Cond i1 i2)   = cond i1 i2
+--dispatch (Cond i1 i2)   = cond i1 i2
 dispatch (Pack t n)   = pack t n
 dispatch (Casejump bs)  = casejump bs
 dispatch (Split n)      = split n
@@ -225,15 +225,15 @@ gt = relational2 (>)
 ge :: GmState -> GmState
 ge = relational2 (>=)
 
-cond :: GmCode -> GmCode -> GmState -> GmState
-cond i1 i2 state =
-    putCode code' $ putStack as state
-    where
-        code = getCode state
-        (a : as) = getStack state
-        code' = case hLookup (getHeap state) a of
-            (NNum 1) -> i1 ++ code
-            (NNum 0) -> i2 ++ code
+--cond :: GmCode -> GmCode -> GmState -> GmState
+--cond i1 i2 state =
+--    putCode code' $ putStack as state
+--    where
+--        code = getCode state
+--        (a : as) = getStack state
+--        code' = case hLookup (getHeap state) a of
+--            (NNum 1) -> i1 ++ code
+--            (NNum 0) -> i2 ++ code
 
 pack :: Int -> Int -> GmState -> GmState
 pack t n state =
@@ -304,16 +304,17 @@ boxBoolean b state =
     putStack (addr : stack) $ putHeap heap state
     where
         stack = getStack state
-        (heap, addr) = hAlloc (getHeap state) $ NNum b'
-        b' | b = 1
-           | otherwise = 0
+        (heap, addr) = hAlloc (getHeap state) $ NConstr b' []
+        b' | b = 2
+           | otherwise = 1
 
-unboxBoolean :: Addr -> GmState -> Bool
-unboxBoolean addr state =
-    case hLookup (getHeap state) addr of
-        (NNum 0) -> False
-        (NNum 1) -> True
-        _ -> error "Trying to unbox value other than boolean"
+--not needed for the time being
+--unboxBoolean :: Addr -> GmState -> Bool
+--unboxBoolean addr state =
+--    case hLookup (getHeap state) addr of
+--        (NNum 0) -> False
+--        (NNum 1) -> True
+--        _ -> error "Trying to unbox value other than boolean"
 
 primitive1 :: (b -> GmState -> GmState) ->
               (Addr -> GmState -> a) ->
