@@ -70,7 +70,7 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
-compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
+compileE (EIf cond et ef) env =
     (compileE cond env) ++ [Cond (compileE et env) (compileE ef env)]
 compileE (EAp (EAp (EVar name) e1) e2) env =
     compileE e2 env ++
