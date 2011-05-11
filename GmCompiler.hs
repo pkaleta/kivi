@@ -80,11 +80,7 @@ compileE (EAp (EAp (EVar name) e1) e2) env =
     compileE e1 (argOffset 1 env) ++
     case aHasKey builtinDyadic name of
         True -> [aLookup builtinDyadic name $ error "This is not possible"]
-        False -> [Pushglobal name, Mkap]
-compileE (EAp e1 e2) env =
-    compileE e2 env ++
-    compileE e1 (argOffset 1 env) ++
-    [Mkap]
+        False -> [Pushglobal name, Mkap, Mkap]
 compileE expr env = compileC expr env ++ [Eval]
 
 compileD :: [CoreAlt] -> Assoc Name Addr -> Assoc Int GmCode
