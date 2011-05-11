@@ -39,7 +39,7 @@ builtinDyadic = [("+", Add),
                  ("negate", Neg)]
 
 compile :: CoreProgram -> GmState
-compile program = (initialCode, [], [], heap, globals, initialStats)
+compile program = ([], initialCode, [], [], heap, globals, initialStats)
     where
         (heap, globals) = buildInitialHeap program
 
@@ -50,7 +50,7 @@ buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
 buildInitialHeap program =
     mapAccumL allocateSc hInitial (compiled ++ compiledPrimitives)
     where
-        compiled = trace ("**************" ++ show program) map compileSc $ program ++ preludeDefs
+        compiled = map compileSc $ program ++ preludeDefs
 
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
 allocateSc heap (name, argc, code) = (heap', (name, addr))

@@ -76,6 +76,10 @@ dispatch Le             = le
 dispatch Gt             = gt
 dispatch Ge             = ge
 dispatch (Cond i1 i2)   = cond i1 i2
+dispatch (Pack tag n)   = pack tag n
+dispatch (Casejump bs)  = casejump bs
+dispatch (Split n)      = split n
+dispatch (Print)        = print2
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -84,12 +88,8 @@ unwind state = newState (hLookup heap addr) state
         addr = head $ getStack state
 
 newState :: Node -> GmState -> GmState
-newState (NNum n) state =
-    putCode code $ putStack (addr : stack) $ putDump ds state
-    where
-        d : ds = getDump state
-        (code, stack) = d
-        addr = head $ getStack state
+newState (NNum n) state = unwindDump state
+newState (NConstr t as) state = unwindDump state
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
 newState (NGlobal argc code) state =
     case argc > length stack - 1 of
@@ -108,6 +108,12 @@ newState (NGlobal argc code) state =
 newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
     where
         stack' = addr : (tail $ getStack state)
+
+unwindDump state =
+    putCode code $ putStack (addr : stack) $ putDump ds state
+    where
+        (code, stack) : ds = getDump state
+        addr = head $ getStack state
 
 pushglobal :: Name -> GmState -> GmState
 pushglobal name state =
@@ -227,6 +233,47 @@ cond i1 i2 state =
         code' = case hLookup (getHeap state) a of
             (NNum 1) -> i1 ++ code
             (NNum 0) -> i2 ++ code
+
+pack :: Int -> Int -> GmState -> GmState
+pack t n state =
+    putStack stack' $ putHeap heap' state
+    where
+        stack' = addr : (drop n stack)
+        (heap', addr) = hAlloc (getHeap state) (NConstr t $ take n stack)
+        stack = getStack state
+
+casejump :: Assoc Int GmCode -> GmState -> GmState
+casejump branches state =
+    case aHasKey branches t of
+        True ->
+            putCode (code' ++ code) state
+            where
+                code' = aLookup branches t $ error "Not possible"
+        False ->
+            error "No suitable case branch found"
+    where
+        code = getCode state
+        (NConstr t as) = hLookup (getHeap state) (head $ getStack state)
+
+split :: Int -> GmState -> GmState
+split n state =
+    putStack stack' state
+    where
+        stack' = args ++ as
+        (NConstr t args) = hLookup (getHeap state) a
+        (a : as) = getStack state
+
+print2 :: GmState -> GmState
+print2 state =
+    case hLookup (getHeap state) a of
+        (NNum n) -> putOutput (output ++ show n) state
+        (NConstr t as) -> putCode code' $ putStack stack' state
+            where
+                code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)
+                stack' = as ++ (getStack state)
+    where
+        (a : as) = getStack state
+        output = getOutput state
 
 getArg :: Node -> Addr
 getArg (NAp a1 a2) = a2
