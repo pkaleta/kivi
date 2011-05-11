@@ -93,11 +93,18 @@ newState (NNum n) state =
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
 newState (NGlobal argc code) state =
     case argc > length stack - 1 of
-        True -> error "Not enough arguments on the stack"
-        False -> putCode code $ putStack (rearrange argc heap stack) state
+        True ->
+            case dump of
+                [] ->
+                    error "Not enough arguments on the stack"
+                ((is, as) : dump') ->
+                    putCode is $ putStack (head stack : as) state
+        False ->
+            putCode code $ putStack (rearrange argc heap stack) state
     where
         stack = getStack state
         heap = getHeap state
+        dump = getDump state
 newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
     where
         stack' = addr : (tail $ getStack state)

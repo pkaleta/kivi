@@ -67,10 +67,6 @@ compileR expr env = compileE expr env ++ [Update n, Pop n, Unwind]
         n = length env
 
 compileE :: GmCompiler
-compileE (EVar v) env =
-    case aHasKey env v of
-        True -> [Push $ aLookup env v $ error "This is not possible"]
-        False -> [Pushglobal v]
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
