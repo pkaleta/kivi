@@ -268,10 +268,11 @@ print2 :: GmState -> GmState
 print2 state =
     case hLookup (getHeap state) a of
         (NNum n) -> putOutput (output ++ show n ++ ", ") $ putStack as state
-        (NConstr t as) -> putCode code' $ putStack stack' state
+        (NConstr t as) -> putOutput output' $ putCode code' $ putStack stack' state
             where
                 code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)
                 stack' = as ++ (getStack state)
+                output' = output ++ "(NConstr " ++ show t ++ " ["
     where
         (a : as) = getStack state
         output = getOutput state
