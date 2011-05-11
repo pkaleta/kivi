@@ -19,17 +19,18 @@ showResults [] = ""
 showResults (state : states) =
     case length stack > 0 of
         True ->
-            show stats ++ ": " ++ show code ++ ", " ++ show stack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
+            show stats ++ ": " ++ show output ++ ", " ++ show code ++ ", " ++ show stack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
             where
                 topNode = (hLookup heap topAddr)
                 topAddr = head $ getStack state
         False ->
-            show code ++ ", " ++ show stack ++ "\n\n" ++ showResults states
+            show output ++ ", " ++ show code ++ ", " ++ show stack ++ "\n\n" ++ showResults states
     where
         code = getCode state
         stack = getStack state
         heap = getHeap state
         stats = getStats state
+        output = getOutput state
 
 eval :: GmState -> [GmState]
 eval state = state : restStates
@@ -266,7 +267,7 @@ split n state =
 print2 :: GmState -> GmState
 print2 state =
     case hLookup (getHeap state) a of
-        (NNum n) -> putOutput (output ++ show n) state
+        (NNum n) -> putOutput (output ++ show n ++ ", ") $ putStack as state
         (NConstr t as) -> putCode code' $ putStack stack' state
             where
                 code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)

@@ -44,13 +44,13 @@ compile program = ([], initialCode, [], [], heap, globals, initialStats)
         (heap, globals) = buildInitialHeap program
 
 initialCode :: GmCode
-initialCode = [Pushglobal "main", Eval]
+initialCode = [Pushglobal "main", Eval, Print]
 
 buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
 buildInitialHeap program =
     mapAccumL allocateSc hInitial (compiled ++ compiledPrimitives)
     where
-        compiled = map compileSc $ program ++ preludeDefs
+        compiled = trace ("***************" ++ show (map compileSc program)) map compileSc $ program ++ preludeDefs
 
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
 allocateSc heap (name, argc, code) = (heap', (name, addr))
@@ -59,7 +59,7 @@ allocateSc heap (name, argc, code) = (heap', (name, addr))
 
 compileSc :: (Name, [Name], CoreExpr) -> GmCompiledSc
 compileSc (name, args, expr) =
-    trace ("***************" ++ show expr) (name, length args, compileR expr $ zip args [0..])
+    (name, length args, compileR expr $ zip args [0..])
 
 compileR :: GmCompiler
 compileR expr env = compileE expr env ++ [Update n, Pop n, Unwind]
@@ -70,7 +70,6 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
---compileE (EConstr t n) env = 2
 compileE (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD alts env]
 compileE (EIf cond et ef) env =
@@ -98,13 +97,27 @@ compileC (EVar v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
+compileC (EConstr t n) env = [Pack t n]
 compileC (ENum n) env = [Pushint n]
-compileC (EAp e1 e2) env =
-    compileC e2 env ++
-    compileC e1 (argOffset 1 env) ++
-    [Mkap]
+compileC (EAp e1 e2) env = fst $ compileAp (EAp e1 e2) env
+--    compileC e2 env ++
+--    compileC e1 (argOffset 1 env) ++
+--    [Mkap]
 compileC (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
+
+compileAp :: CoreExpr -> GmEnvironment -> (GmCode, Int)
+compileAp (EConstr t n) env = ([Pack t n], n)
+compileAp (EAp e1 e2) env =
+    case n > 0 of
+        True ->
+            (codeE2 ++ codeE1, n - 1)
+        False ->
+            (codeE2 ++ codeE1 ++ [Mkap], 0)
+    where
+        (codeE2, _) = compileAp e2 env
+        (codeE1, n) = compileAp e1 (argOffset 1 env)
+compileAp node env = (compileC node env, 0)
 
 compileLet :: [(Name, CoreExpr)] -> GmCompiler
 compileLet defs body env =
