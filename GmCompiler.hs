@@ -59,7 +59,7 @@ allocateSc heap (name, argc, code) = (heap', (name, addr))
 
 compileSc :: (Name, [Name], CoreExpr) -> GmCompiledSc
 compileSc (name, args, expr) =
-    (name, length args, compileR expr $ zip args [0..])
+    trace ("***************" ++ show expr) (name, length args, compileR expr $ zip args [0..])
 
 compileR :: GmCompiler
 compileR expr env = compileE expr env ++ [Update n, Pop n, Unwind]
@@ -70,11 +70,14 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
+--compileE (EConstr t n) env = 2
+compileE (ECase expr alts) env =
+    compileE expr env ++ [Casejump $ compileD alts env]
 compileE (EIf cond et ef) env =
     (compileE cond env) ++ [Cond (compileE et env) (compileE ef env)]
 compileE (EAp (EAp (EVar name) e1) e2) env =
     compileE e2 env ++
-    compileE e1 env ++
+    compileE e1 (argOffset 1 env) ++
     case aHasKey builtinDyadic name of
         True -> [aLookup builtinDyadic name $ error "This is not possible"]
         False -> [Pushglobal name, Mkap]
@@ -83,6 +86,16 @@ compileE (EAp e1 e2) env =
     compileE e1 (argOffset 1 env) ++
     [Mkap]
 compileE expr env = compileC expr env ++ [Eval]
+
+compileD :: [CoreAlt] -> Assoc Name Addr -> Assoc Int GmCode
+compileD alts env = [compileA alt env | alt <- alts]
+
+compileA :: CoreAlt -> Assoc Name Addr -> (Int, GmCode)
+compileA (t, args, expr) env =
+    (t, [Split n] ++ compileE expr env' ++ [Slide n])
+    where
+        n = length args
+        env' = zip args [0..] ++ argOffset n env
 
 compileC :: GmCompiler
 compileC (EVar v) env =
