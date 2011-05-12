@@ -8,6 +8,8 @@ import List
 import Common
 import Debug.Trace
 import GmCompiler
+import Text.Regex.Posix
+import Data.List.Utils
 --import Gc
 
 
@@ -79,7 +81,7 @@ dispatch Ge             = ge
 --dispatch (Cond i1 i2)   = cond i1 i2
 dispatch (Pack t n)   = pack t n
 dispatch (Casejump bs)  = casejump bs
-dispatch (Split n)      = split n
+dispatch (Split n)      = split2 n
 dispatch (Print)        = print2
 
 unwind :: GmState -> GmState
@@ -118,9 +120,33 @@ unwindDump state =
 
 pushglobal :: Name -> GmState -> GmState
 pushglobal name state =
-    putStack (addr : getStack state) state
+    case take 4 name == "Pack" of
+        True -> pushglobalPack name state
+        False -> pushglobalNormal name state
+
+pushglobalPack :: Name -> GmState -> GmState
+pushglobalPack name state =
+    case aHasKey globals name of
+        True ->
+            putStack (addr : stack) state
+            where
+                addr = aLookup globals name $ error "This is not possible"
+        False ->
+            putStack (addr : stack) $ putHeap heap' state
+            where
+                (heap', addr) = hAlloc heap $ NGlobal n [Pack t n, Update 0, Unwind]
+                [t, n] = map read $ split "," (name =~ "[0-9]+,[0-9]+" :: String)
+    where
+        globals = getGlobals state
+        stack = getStack state
+        heap = getHeap state
+
+pushglobalNormal :: Name -> GmState -> GmState
+pushglobalNormal name state =
+    putStack stack' state
     where
         addr = aLookup (getGlobals state) name $ error $ "Undeclared global identifier: " ++ name
+        stack' = addr : getStack state
 
 pushint :: Int -> GmState -> GmState
 pushint n state =
@@ -256,8 +282,8 @@ casejump branches state =
         code = getCode state
         (NConstr t as) = hLookup (getHeap state) (head $ getStack state)
 
-split :: Int -> GmState -> GmState
-split n state =
+split2 :: Int -> GmState -> GmState
+split2 n state =
     putStack stack' state
     where
         stack' = args ++ as

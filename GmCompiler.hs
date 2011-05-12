@@ -98,14 +98,17 @@ compileC (EVar v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
-compileC (EConstr t n) env = [Pack t n]
+compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
 compileC (ENum n) env = [Pushint n]
-compileC (EAp e1 e2) env = fst $ compileAp (EAp e1 e2) env
---    compileC e2 env ++
---    compileC e1 (argOffset 1 env) ++
---    [Mkap]
+compileC (EAp e1 e2) env =
+--fst $ compileAp (EAp e1 e2) env
+    compileC e2 env ++
+    compileC e1 (argOffset 1 env) ++
+    [Mkap]
 compileC (ELet isRec defs body) env | isRec = compileLetrec defs body env
                                     | otherwise = compileLet defs body env
+
+constrFunctionName t n = "Pack{" ++ show t ++ "," ++ show n ++ "}"
 
 compileAp :: CoreExpr -> GmEnvironment -> (GmCode, Int)
 compileAp (EConstr t n) env = ([Pack t n], n)
