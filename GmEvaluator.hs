@@ -257,7 +257,7 @@ ge = relational2 (>=)
 
 cond :: GmCode -> GmCode -> GmState -> GmState
 cond ist isf state =
-    putCode code' $ putStack as state
+    putCode code' $ putStack vs state
     where
         (v : vs) = getVStack state
         code' = case v of
@@ -321,7 +321,7 @@ mkbool = mkobj (\v -> NNum v)
 mkobj :: (Int -> Node) -> GmState -> GmState
 mkobj cn state = putStack (addr : stack) $ putHeap heap' state
     where
-        (heap', addr) = hAlloc $ getHeap state $ cn v
+        (heap', addr) = hAlloc (getHeap state) $ cn v
         stack = getStack state
         (v : vs) = getVStack state
 
@@ -411,7 +411,7 @@ binOp op state = putVStack vs state
         (v1 : v2 : vs) = getVStack state
 
 unaryOp :: (Int -> Int) -> GmState -> GmState
-unaryOp op state = putVStack (op v) : vs
+unaryOp op state = putVStack ((op v) : vs) state
     where
         (v : vs) = getVStack state
 

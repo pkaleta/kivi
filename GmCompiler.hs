@@ -40,7 +40,7 @@ builtinDyadic = [("+", Add),
                  ("negate", Neg)]
 
 compile :: CoreProgram -> GmState
-compile program = ([], initialCode, [], [], heap, globals, initialStats)
+compile program = ([], initialCode, [], [], [], heap, globals, initialStats)
     where
         (heap, globals) = buildInitialHeap program
 
