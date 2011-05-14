@@ -78,11 +78,15 @@ dispatch Lt             = lt
 dispatch Le             = le
 dispatch Gt             = gt
 dispatch Ge             = ge
---dispatch (Cond i1 i2)   = cond i1 i2
+dispatch (Cond ist isf)   = cond ist isf
 dispatch (Pack t n)   = pack t n
 dispatch (Casejump bs)  = casejump bs
 dispatch (Split n)      = split2 n
 dispatch (Print)        = print2
+dispatch (Pushbasic n)  = pushbasic n
+dispatch (MkBool)       = mkbool
+dispatch (MkInt)        = mkint
+dispatch (Get)          = get
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -219,19 +223,19 @@ eval2 state =
         (a : as) = getStack state
 
 add :: GmState -> GmState
-add = arithmetic2 (+)
+add = binOp (+)
 
 sub :: GmState -> GmState
-sub = arithmetic2 (-)
+sub = binOp (-)
 
 mul :: GmState -> GmState
-mul = arithmetic2 (*)
+mul = binOp (*)
 
 div2 :: GmState -> GmState
-div2 = arithmetic2 (div)
+div2 = binOp (div)
 
 neg :: GmState -> GmState
-neg = arithmetic1 negate
+neg = unaryOp negate
 
 eq :: GmState -> GmState
 eq = relational2 (==)
@@ -251,15 +255,15 @@ gt = relational2 (>)
 ge :: GmState -> GmState
 ge = relational2 (>=)
 
---cond :: GmCode -> GmCode -> GmState -> GmState
---cond i1 i2 state =
---    putCode code' $ putStack as state
---    where
---        code = getCode state
---        (a : as) = getStack state
---        code' = case hLookup (getHeap state) a of
---            (NNum 1) -> i1 ++ code
---            (NNum 0) -> i2 ++ code
+cond :: GmCode -> GmCode -> GmState -> GmState
+cond ist isf state =
+    putCode code' $ putStack as state
+    where
+        (v : vs) = getVStack state
+        code' = case v of
+            2 -> ist ++ code
+            1 -> isf ++ code
+        code = getCode state
 
 pack :: Int -> Int -> GmState -> GmState
 pack t n state =
@@ -302,6 +306,35 @@ print2 state =
     where
         (a : as) = getStack state
         output = getOutput state
+
+pushbasic :: Int -> GmState -> GmState
+pushbasic v state = putVStack (v : vstack) state
+    where
+        vstack = getVStack state
+
+mkint :: GmState -> GmState
+mkint = mkobj (\v -> NConstr v [])
+
+mkbool :: GmState -> GmState
+mkbool = mkobj (\v -> NNum v)
+
+mkobj :: (Int -> Node) -> GmState -> GmState
+mkobj cn state = putStack (addr : stack) $ putHeap heap' state
+    where
+        (heap', addr) = hAlloc $ getHeap state $ cn v
+        stack = getStack state
+        (v : vs) = getVStack state
+
+get :: GmState -> GmState
+get state = putStack as $ putVStack vstack' state
+    where
+        (a : as) = getStack state
+        vstack' = case hLookup (getHeap state) a of
+            (NNum n) ->
+                n : vstack
+            (NConstr t []) ->
+                t : vstack
+        vstack = getVStack state
 
 getArg :: Node -> Addr
 getArg (NAp a1 a2) = a2
@@ -370,4 +403,16 @@ arithmetic2 = primitive2 boxInteger unboxInteger
 
 relational2 :: (Int -> Int -> Bool) -> (GmState -> GmState)
 relational2 = primitive2 boxBoolean unboxInteger
+
+binOp :: (Int -> Int -> Int) -> GmState -> GmState
+binOp op state = putVStack vs state
+    where
+        vstack' = (op v1 v2) : vs
+        (v1 : v2 : vs) = getVStack state
+
+unaryOp :: (Int -> Int) -> GmState -> GmState
+unaryOp op state = putVStack (op v) : vs
+    where
+        (v : vs) = getVStack state
+
 
