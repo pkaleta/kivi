@@ -86,7 +86,7 @@ type GmStack = [Addr]
 
 type GmDump = [GmDumpItem]
 
-type GmDumpItem = (GmCode, GmStack)
+type GmDumpItem = (GmCode, GmStack, GmVStack)
 
 type GmHeap = Heap Node
 

@@ -104,8 +104,8 @@ newState (NGlobal argc code) state =
             case dump of
                 [] ->
                     error "Not enough arguments on the stack"
-                ((is, as) : dump') ->
-                    putCode is $ putStack (head stack : as) state
+                ((is, as, vs) : dump') ->
+                    putCode is $ putStack (head stack : as) $ putVStack vs state
         False ->
             putCode code $ putStack (rearrange argc heap stack) state
     where
@@ -117,9 +117,9 @@ newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
         stack' = addr : (tail $ getStack state)
 
 unwindDump state =
-    putCode code $ putStack (addr : stack) $ putDump ds state
+    putCode code $ putStack (addr : stack) $ putVStack vstack $ putDump ds state
     where
-        (code, stack) : ds = getDump state
+        (code, stack, vstack) : ds = getDump state
         addr = head $ getStack state
 
 pushglobal :: Name -> GmState -> GmState
@@ -218,9 +218,10 @@ eval2 :: GmState -> GmState
 eval2 state =
     putCode [Unwind] $ putStack [a] $ putDump dump' state
     where
-        dump' = (code, as) : getDump state
+        dump' = (code, as, vstack) : getDump state
         code = getCode state
         (a : as) = getStack state
+        vstack = getVStack state
 
 add :: GmState -> GmState
 add = binOp (+)
