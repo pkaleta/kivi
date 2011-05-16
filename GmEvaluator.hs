@@ -21,16 +21,17 @@ showResults [] = ""
 showResults (state : states) =
     case length stack > 0 of
         True ->
-            show stats ++ ": " ++ show output ++ ", " ++ show code ++ ", " ++ show stack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
+            show stats ++ ": " ++ show output ++ ", " ++ show code ++ ", stack: " ++ show stack ++ ", vstack: " ++ show vstack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
             where
                 topNode = (hLookup heap topAddr)
                 topAddr = head $ getStack state
         False ->
-            show output ++ ", " ++ show code ++ ", " ++ show stack ++ "\n\n" ++ showResults states
+            show output ++ ", " ++ show code ++ ", stack: " ++ show stack ++ ", vstack: " ++ show vstack ++ "\n\n" ++ showResults states
     where
         code = getCode state
         stack = getStack state
         heap = getHeap state
+        vstack = getVStack state
         stats = getStats state
         output = getOutput state
 
@@ -224,16 +225,16 @@ eval2 state =
         vstack = getVStack state
 
 add :: GmState -> GmState
-add = binOp (+)
+add = arithmetic2 (+)
 
 sub :: GmState -> GmState
-sub = binOp (-)
+sub = arithmetic2 (-)
 
 mul :: GmState -> GmState
-mul = binOp (*)
+mul = arithmetic2 (*)
 
 div2 :: GmState -> GmState
-div2 = binOp (div)
+div2 = arithmetic2 (div)
 
 neg :: GmState -> GmState
 neg = unaryOp negate
@@ -258,7 +259,7 @@ ge = relational2 (>=)
 
 cond :: GmCode -> GmCode -> GmState -> GmState
 cond ist isf state =
-    putCode code' $ putStack vs state
+    putCode code' $ putVStack vs state
     where
         (v : vs) = getVStack state
         code' = case v of
@@ -400,13 +401,19 @@ arithmetic1 :: (Int -> Int) -> (GmState -> GmState)
 arithmetic1 = primitive1 boxInteger unboxInteger
 
 arithmetic2 :: (Int -> Int -> Int) -> (GmState -> GmState)
-arithmetic2 = primitive2 boxInteger unboxInteger
+--arithmetic2 = primitive2 boxInteger unboxInteger
+arithmetic2 op = binOp op
 
 relational2 :: (Int -> Int -> Bool) -> (GmState -> GmState)
-relational2 = primitive2 boxBoolean unboxInteger
+--relational2 = primitive2 boxBoolean unboxInteger
+relational2 op = binOp fun
+    where
+        fun x y = case (op x y) of
+            True -> 2
+            False -> 1
 
 binOp :: (Int -> Int -> Int) -> GmState -> GmState
-binOp op state = putVStack vs state
+binOp op state = putVStack vstack' state
     where
         vstack' = (op v1 v2) : vs
         (v1 : v2 : vs) = getVStack state

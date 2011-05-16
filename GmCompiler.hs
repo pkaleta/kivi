@@ -103,7 +103,7 @@ compileB (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileB et env) (compileB ef env)]
 compileB expr@(EAp (EAp (EVar name) e1) e2) env =
     compileB e2 env ++
-    compileB e1 (argOffset 1 env) ++ -- nie wiem czy tu ma byc argoffset
+    compileB e1 env ++
     case aHasKey builtinDyadic name of
         True -> [aLookup builtinDyadic name $ error "This is not possible"]
         False -> compileE expr env ++ [Get]
