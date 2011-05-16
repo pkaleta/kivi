@@ -319,7 +319,7 @@ mkbool :: GmState -> GmState
 mkbool = mkobj (\v -> NNum v)
 
 mkobj :: (Int -> Node) -> GmState -> GmState
-mkobj cn state = putStack (addr : stack) $ putHeap heap' state
+mkobj cn state = putStack (addr : stack) $ putHeap heap' $ putVStack vs state
     where
         (heap', addr) = hAlloc (getHeap state) $ cn v
         stack = getStack state
