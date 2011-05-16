@@ -88,8 +88,7 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
 compileR d (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD (compileR $ d + n) alts env]
-    where n = length alts
+    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
 
@@ -117,7 +116,7 @@ compileE (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs
                                     | otherwise = compileLet [Slide $ length defs] compileE defs body env
 compileE (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD compileE alts env]
-compileE (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
+--compileE (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
 compileE (EAp (EVar "negate") expr) env =
     compileB expr env ++ [MkInt]
 compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =

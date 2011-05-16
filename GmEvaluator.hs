@@ -292,7 +292,9 @@ split2 :: Int -> GmState -> GmState
 split2 n state =
     putStack stack' state
     where
-        stack' = args ++ as
+        stack' = case n == length args of
+            True -> args ++ as
+            False -> error "Incorrect number of constructor parameters."
         (NConstr t args) = hLookup (getHeap state) a
         (a : as) = getStack state
 
