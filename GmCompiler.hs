@@ -11,20 +11,21 @@ type GmCompiledSc = (Name, Int, GmCode)
 type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
-compiledPrimitives :: [GmCompiledSc]
-compiledPrimitives = [("+", 2, [Push 1, Eval, Push 1, Eval, Add, Update 2, Pop 2, Unwind]),
-                      ("-", 2, [Push 1, Eval, Push 1, Eval, Sub, Update 2, Pop 2, Unwind]),
-                      ("*", 2, [Push 1, Eval, Push 1, Eval, Mul, Update 2, Pop 2, Unwind]),
-                      ("/", 2, [Push 1, Eval, Push 1, Eval, Div, Update 2, Pop 2, Unwind]),
-                      ("negate", 1, [Push 0, Eval, Neg, Update 1, Pop 1, Unwind]),
-                      ("==", 2, [Push 1, Eval, Push 1, Eval, Eq, Update 2, Pop 2, Unwind]),
-                      ("!=", 2, [Push 1, Eval, Push 1, Eval, Ne, Update 2, Pop 2, Unwind]),
-                      ("<", 2, [Push 1, Eval, Push 1, Eval, Lt, Update 2, Pop 2, Unwind]),
-                      ("<=", 2, [Push 1, Eval, Push 1, Eval, Le, Update 2, Pop 2, Unwind]),
-                      (">", 2, [Push 1, Eval, Push 1, Eval, Gt, Update 2, Pop 2, Unwind]),
-                      (">=", 2, [Push 1, Eval, Push 1, Eval, Ge, Update 2, Pop 2, Unwind])
-                      --, ("if", 3, [Push 0, Eval, Cond [Push 1] [Push 2], Update 3, Pop 3, Unwind])
-                      ]
+primitives :: [(Name, [Name], CoreExpr)]
+primitives = [("+", ["x", "y"], EAp (EAp (EVar "+") (EVar "x")) (EVar "y")),
+              ("-", ["x", "y"], EAp (EAp (EVar "-") (EVar "x")) (EVar "y")),
+              ("*", ["x", "y"], EAp (EAp (EVar "*") (EVar "x")) (EVar "y")),
+              ("/", ["x", "y"], EAp (EAp (EVar "/") (EVar "x")) (EVar "y")),
+              ("negate", ["x"], EAp (EVar "negate") (EVar "x")),
+              ("==", ["x", "y"], EAp (EAp (EVar "==") (EVar "x")) (EVar "y")),
+              ("!=", ["x", "y"], EAp (EAp (EVar "!=") (EVar "x")) (EVar "y")),
+              ("<", ["x", "y"], EAp (EAp (EVar "<") (EVar "x")) (EVar "y")),
+              ("<=", ["x", "y"], EAp (EAp (EVar "<=") (EVar "x")) (EVar "y")),
+              (">", ["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")),
+              (">=", ["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")),
+              ("if", ["c", "t", "f"], EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")),
+              ("True", [], EConstr 2 0),
+              ("False", [], EConstr 1 0)]
 
 builtinDyadic :: Assoc Name Instruction
 builtinDyadic = [("+", Add),
@@ -36,8 +37,7 @@ builtinDyadic = [("+", Add),
                  ("<", Lt),
                  ("<=", Le),
                  (">", Gt),
-                 (">=", Ge),
-                 ("negate", Neg)]
+                 (">=", Ge)]
 
 compile :: CoreProgram -> GmState
 compile program = ([], initialCode, [], [], [], heap, globals, initialStats)
@@ -51,7 +51,7 @@ buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
 buildInitialHeap program =
     mapAccumL allocateSc hInitial (compiled ++ compiledPrimitives)
     where
-        compiled = trace ("***************" ++ show (map compileSc program)) map compileSc $ program ++ preludeDefs
+        compiled = map compileSc $ preludeDefs ++ program ++ primitives
 
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
 allocateSc heap (name, argc, code) = (heap', (name, addr))
@@ -67,10 +67,29 @@ compileR expr env = compileE expr env ++ [Update n, Pop n, Unwind]
     where
         n = length env
 
+compileB :: GmCompiler
+compileB (NNum n) env = [Pushbasic n]
+compileB (ELet isRec defs body) env | isRec = compileLetrec compileB defs body env
+                                    | otherwise = compileLet compileB defs body env
+compileB (EAp (EVar "negate") expr) env =
+    compileB expr env ++ [Neg]
+compileB (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
+    compileB cond env ++ [Cond (compileB et env) (compileB ef env)]
+compileB expr env =
+    case expr of
+        (EAp (EAp (EVar name) e1) e2) ->
+            compileB e2 env ++
+            compileB e1 (argOffset 1 env) ++ -- nie wiem czy tu ma byc argoffset
+            case aHasKey builtinDyadic name of
+                True -> [aLookup builtinDyadic name $ error "This is not possible"]
+                False -> compileE expr env ++ [Get]
+        expr ->
+            compileE expr env ++ [Get]
+
 compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
-compileE (ELet isRec defs body) env | isRec = compileLetrec defs body env
-                                    | otherwise = compileLet defs body env
+compileE (ELet isRec defs body) env | isRec = compileLetrec compileE defs body env
+                                    | otherwise = compileLet compileE defs body env
 compileE (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD alts env]
 --compileE (EIf cond et ef) env =
@@ -105,8 +124,8 @@ compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
-compileC (ELet isRec defs body) env | isRec = compileLetrec defs body env
-                                    | otherwise = compileLet defs body env
+compileC (ELet isRec defs body) env | isRec = compileLetrec compileC defs body env
+                                    | otherwise = compileLet compileC defs body env
 
 constrFunctionName t n = "Pack{" ++ show t ++ "," ++ show n ++ "}"
 
@@ -123,9 +142,9 @@ compileAp (EAp e1 e2) env =
         (codeE1, n) = compileAp e1 (argOffset 1 env)
 compileAp node env = (compileC node env, 0)
 
-compileLet :: [(Name, CoreExpr)] -> GmCompiler
-compileLet defs body env =
-    compileDefs defs env ++ compileE body env' ++ [Slide $ length defs]
+compileLet :: GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
+compileLet comp defs body env =
+    compileDefs defs env ++ comp body env' ++ [Slide $ length defs]
     where
         env' = compileArgs defs env
 
@@ -140,9 +159,9 @@ compileArgs defs env =
     where
         n = length defs
 
-compileLetrec :: [(Name, CoreExpr)] -> GmCompiler
-compileLetrec defs body env =
-    [Alloc n] ++ compileRecDefs n defs env' ++ compileE body env' ++ [Slide n]
+compileLetrec :: GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
+compileLetrec comp defs body env =
+    [Alloc n] ++ compileRecDefs n defs env' ++ comp body env' ++ [Slide n]
     where
         n = length defs
         env' = compileArgs defs env
