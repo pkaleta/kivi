@@ -21,12 +21,12 @@ showResults [] = ""
 showResults (state : states) =
     case length stack > 0 of
         True ->
-            show stats ++ ": " ++ show output ++ ", " ++ show code ++ ", stack: " ++ show stack ++ ", vstack: " ++ show vstack ++ ", " ++ show topNode ++ "\n\n" ++ showResults states
+            show stats ++ ": " ++ show output ++ "\ncode:" ++ show code ++ "\nstack: " ++ show stack ++ "\nvstack: " ++ show vstack ++ "\n" ++ show topNode ++ "\n\n" ++ showResults states
             where
                 topNode = (hLookup heap topAddr)
                 topAddr = head $ getStack state
         False ->
-            show output ++ ", " ++ show code ++ ", stack: " ++ show stack ++ ", vstack: " ++ show vstack ++ "\n\n" ++ showResults states
+            "output: " ++ show output ++ "\ncode" ++ show code ++ "\nstack: " ++ show stack ++ "\nvstack: " ++ show vstack ++ "\n\n" ++ showResults states
     where
         code = getCode state
         stack = getStack state
@@ -315,10 +315,10 @@ pushbasic v state = putVStack (v : vstack) state
         vstack = getVStack state
 
 mkint :: GmState -> GmState
-mkint = mkobj (\v -> NConstr v [])
+mkint = mkobj (\v -> NNum v)
 
 mkbool :: GmState -> GmState
-mkbool = mkobj (\v -> NNum v)
+mkbool = mkobj (\v -> NConstr v [])
 
 mkobj :: (Int -> Node) -> GmState -> GmState
 mkobj cn state = putStack (addr : stack) $ putHeap heap' $ putVStack vs state
