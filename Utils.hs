@@ -60,3 +60,10 @@ aRange :: Assoc a b -> [b]
 aRange xs = [v | (_, v) <- xs]
 
 aEmpty = []
+
+bindersOf :: [(a, b)] -> [a]
+bindersOf defns = [name | (name, _) <- defns]
+
+rhsOf :: [(a, b)] -> [b]
+rhsOf defns = [rhs | (_, rhs) <- defns]
+

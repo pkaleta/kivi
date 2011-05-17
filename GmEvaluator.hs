@@ -8,6 +8,7 @@ import List
 import Common
 import Debug.Trace
 import GmCompiler
+import LambdaLifter
 import Text.Regex.Posix
 import Data.List.Utils
 --import Gc
@@ -15,6 +16,9 @@ import Data.List.Utils
 
 run :: [Char] -> [Char]
 run = showResults . eval . compile . parse
+
+runS :: [Char] -> [Char]
+runS = putStrLn . lift . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""

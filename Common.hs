@@ -13,20 +13,6 @@ data Expr a
     | ELam [a] (Expr a)                     -- lambda abstractions
     deriving (Show)
 
-type AnnExpr a b = (b, AnnExpr' a b)
-
-data AnnExpr' a b = AVar Name
-                  | ANum Int
-                  | AConstr Int Int
-                  | AAp (AnnExpr a b) (AnnExpr a b)
-                  | ALet IsRec [AnnDefn a b] (AnnExpr a b)
-                  | ACase (AnnExpr a b) [AnnAlt a b]
-                  | ALam [a] (AnnExpr a b)
-
-type AnnDefn a b = (a, AnnExpr a b)
-type AnnAlt a b = (Int, [a], AnnExpr a b)
-type AnnProgram a b = [(Name, [a], AnnExpr a b)]
-
 type CoreExpr = Expr Name
 type IsRec = Bool
 type Alter a = (Int, [a], Expr a)
