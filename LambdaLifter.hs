@@ -37,9 +37,9 @@ calcFreeVars localVars (EAp e1 e2) = (union s1 s2, AAp ae1 ae2)
     where
         ae1@(s1, _) = calcFreeVars localVars e1
         ae2@(s2, _) = calcFreeVars localVars e2
-calcFreeVars localVars (ELam args expr) = (difference fvs args, ae)
+calcFreeVars localVars (ELam args expr) = (difference fvs args, ALam args expr')
     where
-        ae@(fvs, _) = calcFreeVars (union localVars $ fromList args) expr
+        expr'@(fvs, _) = calcFreeVars (union localVars $ fromList args) expr
 calcFreeVars localVars (ELet isRec defns expr) =
     (union bodyFvs defnsFvs, ALet isRec defns' expr')
     where
@@ -60,6 +60,21 @@ calcFreeVars localVars (EConstr t n) = error "Not implemented yet"
 
 
 abstract :: AnnProgram Name (Set Name) -> CoreProgram
+abstract program = [(name, args, abstractExpr expr) | (name, args, expr) <- program]
+
+
+abstractExpr :: AnnExpr Name (Set Name) -> CoreExpr
+abstractExpr (freeVars, ANum n) = ENum n
+abstractExpr (freeVars, AVar v) = EVar v
+abstractExpr (freeVars, AAp e1 e2) = EAp (abstractExpr e1) (abstractExpr e2)
+abstractExpr (freeVars, ALet isRec defns expr) =
+    ELet isRec [(name, abstractExpr body) | (name, body) <- defns] (abstractExpr expr)
+abstractExpr (freeVars, ALam args expr) =
+    foldl EAp sc $ map EVar freeVarsList
+    where
+        freeVarsList = toList freeVars
+        sc = ELet False [("sc", )] (EVar "sc")
+        scBody = ELam (freeVarsList ++ args) (abstractExpr expr)
 
 
 rename :: CoreProgram -> CoreProgram
