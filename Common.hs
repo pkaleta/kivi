@@ -1,9 +1,6 @@
 module Common where
 
--- Utils
-type Addr = Int
-type Assoc a b = [(a, b)]
-type Heap a = (Int, [Addr], Assoc Addr a)
+import Utils
 
 -- Parser
 data Expr a
@@ -14,8 +11,21 @@ data Expr a
     | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
---    | EIf (Expr a) (Expr a) (Expr a)        -- if expression
     deriving (Show)
+
+type AnnExpr a b = (b, AnnExpr' a b)
+
+data AnnExpr' a b = AVar Name
+                  | ANum Int
+                  | AConstr Int Int
+                  | AAp (AnnExpr a b) (AnnExpr a b)
+                  | ALet IsRec [AnnDefn a b] (AnnExpr a b)
+                  | ACase (AnnExpr a b) [AnnAlt a b]
+                  | ALam [a] (AnnExpr a b)
+
+type AnnDefn a b = (a, AnnExpr a b)
+type AnnAlt a b = (Int, [a], AnnExpr a b)
+type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 
 type CoreExpr = Expr Name
 type IsRec = Bool

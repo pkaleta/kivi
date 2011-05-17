@@ -1,7 +1,10 @@
 module Utils where
 
 import Debug.Trace
-import Common
+
+type Addr = Int
+type Assoc a b = [(a, b)]
+type Heap a = (Int, [Addr], Assoc Addr a)
 
 hInitial :: Heap a
 hInitial = (0, [1..], [])
