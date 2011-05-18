@@ -21,6 +21,7 @@ data AnnExpr' a b = AVar Name
                   | ALet IsRec [AnnDefn a b] (AnnExpr a b)
                   | ACase (AnnExpr a b) [AnnAlt a b]
                   | ALam [a] (AnnExpr a b)
+    deriving Show
 
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, [a], AnnExpr a b)
@@ -39,6 +40,7 @@ freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (Set.fromList ar
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
 calcFreeVars localVars (ENum n) = (Set.empty, ANum n)
 calcFreeVars localVars (EVar v) | Set.member v localVars = (Set.singleton v, AVar v)
+                                | otherwise = (Set.empty, AVar v)
 calcFreeVars localVars (EAp e1 e2) = (Set.union s1 s2, AAp ae1 ae2)
     where
         ae1@(s1, _) = calcFreeVars localVars e1
@@ -89,6 +91,7 @@ abstractExpr (freeVars, AConstr t a) = error "Not implemented yet"
 rename :: CoreProgram -> CoreProgram
 rename scs = snd $ mapAccumL renameSc initialNameSupply scs
 
+
 renameSc :: NameSupply -> CoreScDefn -> (NameSupply, CoreScDefn)
 renameSc ns (name, args, expr) =
     (ns2, (name, args', expr'))
@@ -114,7 +117,7 @@ renameExpr mapping ns (EVar v) =
             (Just x) -> x
             Nothing -> v
 renameExpr mapping ns (EAp e1 e2) =
-    (ns2, EAp e1 e2)
+    (ns2, EAp e1' e2')
     where
         (ns1, e1') = renameExpr mapping ns e1
         (ns2, e2') = renameExpr mapping ns1 e2
