@@ -166,6 +166,7 @@ compileC (EAp e1 e2) env =
     [Mkap]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
+compileC x env = error $ show x
 
 
 constrFunctionName t n = "Pack{" ++ show t ++ "," ++ show n ++ "}"

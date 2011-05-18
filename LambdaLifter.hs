@@ -143,12 +143,11 @@ renameExpr mapping ns (EConstr t a) = error "Not implemented yet"
 
 
 collectScs :: CoreProgram -> CoreProgram
-collectScs scs = trace ("************************\n" ++ show scs ++ "\n\n\n\n")
-    foldl collectSc [] scs
+collectScs scs = foldl collectSc [] scs
 
 
 collectSc :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
-collectSc scsAcc (name, args, expr) = trace ("***********" ++ show scs ++ "\n\n\n") [(name, args, expr')] ++ scsAcc ++ scs
+collectSc scsAcc (name, args, expr) = [(name, args, expr')] ++ scsAcc ++ scs
     where
         (scs, expr') = collectExpr expr
 
@@ -164,7 +163,7 @@ collectExpr (EAp e1 e2) =
 collectExpr (ELam args expr) = (scs, ELam args expr')
     where (scs, expr') = collectExpr expr
 collectExpr (ELet isRec defns expr) =
-    trace ("*************#########" ++ show vars) (defnsScs ++ localScs ++ exprScs, ELet isRec vars expr')
+    (defnsScs ++ localScs ++ exprScs, mkELet isRec vars expr')
     where
         (defnsScs, defns') = mapAccumL collectDef [] defns
         localScs = map createSc scDefns
@@ -182,6 +181,11 @@ collectExpr (ELet isRec defns expr) =
         collectDef scsAcc (name, expr) =
             (scsAcc ++ scs, (name, expr'))
             where (scs, expr') = collectExpr expr
+
+        mkELet isRec vars expr =
+            case length vars > 0 of
+                True -> ELet isRec vars expr
+                False -> expr
 
 
 collectExpr (ECase expr alts) = error "Not implemented yet"

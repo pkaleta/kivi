@@ -15,7 +15,7 @@ import Data.List.Utils
 
 
 run :: [Char] -> [Char]
-run = showResults . eval . compile . parse
+run = showResults . eval . compile . lift . parse
 
 runS :: [Char] -> [Char]
 runS = show . lift . parse
