@@ -26,8 +26,8 @@ type AnnAlt a b = (Int, [a], AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 
 
---lift :: CoreProgram -> CoreProgram
---lift = collectSc . rename . abstract . freeVars
+lift :: CoreProgram -> CoreProgram
+lift = collectScs . rename . abstract . freeVars
 
 
 freeVars :: CoreProgram -> AnnProgram Name (Set Name)
@@ -88,7 +88,7 @@ abstractExpr (freeVars, AConstr t a) = error "Not implemented yet"
 rename :: CoreProgram -> CoreProgram
 rename scs = snd $ mapAccumL renameSc initialNameSupply scs
 
-renameSc :: NameSupply -> ScDefn Name -> (NameSupply, ScDefn Name)
+renameSc :: NameSupply -> CoreScDefn -> (NameSupply, CoreScDefn)
 renameSc ns (name, args, expr) =
     (ns2, (name, args', expr'))
     where
@@ -138,7 +138,39 @@ renameExpr mapping ns (ECase expr alts) = error "Not implemented yet"
 renameExpr mapping ns (EConstr t a) = error "Not implemented yet"
 
 
---collectSc :: CoreProgram -> CoreProgram
+collectScs :: CoreProgram -> CoreProgram
+collectScs = foldl collectSc []
+
+
+collectSc :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
+collectSc scAcc (name, args, expr) = [(name, args, expr')] ++ scAcc ++ scDefs
+    where
+        (scDefs, expr') = collectExpr expr
+
+
+collectExpr :: CoreExpr -> ([CoreScDefn], CoreExpr)
+collectExpr (ENum n) = ([], ENum n)
+collectExpr (EVar v) = ([], EVar v)
+collectExpr (EAp e1 e2) =
+    (scs1 ++ scs2, EAp e1' e2')
+    where
+        (scs1, e1') = collectExpr e1
+        (scs2, e2') = collectExpr e2
+collectExpr (ELam args expr) = (scs, ELam args expr')
+    where (scs, expr') = collectExpr expr
+collectExpr (ELet isRec defns expr) =
+    (scs1 ++ scs2, ELet isRec vars expr')
+    where
+        scs1 = map createSc scDefns
+        (scDefns, vars) = partition isSc defns
+        isSc (name, (ELam _ _)) = True
+        isSc (name, _) = False
+        (scs2, expr') = collectExpr expr
+
+        createSc (name, ELam args expr) = (name, args, expr)
+
+collectExpr (ECase expr alts) = error "Not implemented yet"
+collectExpr (EConstr t a) = error "Not implemented yet"
 
 
 freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
