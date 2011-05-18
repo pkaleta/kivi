@@ -64,6 +64,6 @@ aEmpty = []
 bindersOf :: [(a, b)] -> [a]
 bindersOf defns = [name | (name, _) <- defns]
 
-rhsOf :: [(a, b)] -> [b]
-rhsOf defns = [rhs | (_, rhs) <- defns]
+rhssOf :: [(a, b)] -> [b]
+rhssOf defns = [rhs | (_, rhs) <- defns]
 

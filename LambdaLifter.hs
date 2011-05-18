@@ -3,7 +3,12 @@ module LambdaLifter where
 
 import Utils
 import Common
-import Data.Set
+import Data.Set (Set)
+import qualified Data.Set as Set
+import NameSupply
+import Data.Map (Map)
+import qualified Data.Map as Map
+import List
 
 
 type AnnExpr a b = (b, AnnExpr' a b)
@@ -21,40 +26,41 @@ type AnnAlt a b = (Int, [a], AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 
 
-lift :: CoreProgram -> CoreProgram
-lift = collectSc . rename . abstract . freeVars
+--lift :: CoreProgram -> CoreProgram
+--lift = collectSc . rename . abstract . freeVars
 
 
 freeVars :: CoreProgram -> AnnProgram Name (Set Name)
 freeVars [] = []
-freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (fromList args) expr) : (freeVars scs)
+freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (Set.fromList args) expr) : (freeVars scs)
 
 
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
-calcFreeVars localVars (ENum n) = (empty, ANum n)
-calcFreeVars localVars (EVar v) | member v localVars = (singleton v, AVar v)
-calcFreeVars localVars (EAp e1 e2) = (union s1 s2, AAp ae1 ae2)
+calcFreeVars localVars (ENum n) = (Set.empty, ANum n)
+calcFreeVars localVars (EVar v) | Set.member v localVars = (Set.singleton v, AVar v)
+calcFreeVars localVars (EAp e1 e2) = (Set.union s1 s2, AAp ae1 ae2)
     where
         ae1@(s1, _) = calcFreeVars localVars e1
         ae2@(s2, _) = calcFreeVars localVars e2
-calcFreeVars localVars (ELam args expr) = (difference fvs args, ALam args expr')
+calcFreeVars localVars (ELam args expr) = (Set.difference fvs argsSet, ALam args expr')
     where
-        expr'@(fvs, _) = calcFreeVars (union localVars $ fromList args) expr
+        expr'@(fvs, _) = calcFreeVars (Set.union localVars argsSet) expr
+        argsSet = Set.fromList args
 calcFreeVars localVars (ELet isRec defns expr) =
-    (union bodyFvs defnsFvs, ALet isRec defns' expr')
+    (Set.union bodyFvs defnsFvs, ALet isRec defns' expr')
     where
-        binders = fromList $ bindersOf defns
-        exprLvs = union binders localVars
+        binders = Set.fromList $ bindersOf defns
+        exprLvs = Set.union binders localVars
         rhsLvs | isRec = exprLvs
                | otherwise = localVars
         -- annotated stuff
-        rhss' = map (calcFreeVars rhsLvs) $ rhsOf defns
-        defns' = zip binders rhss'
-        expr' = calcFreeVars exprLvs
-        rhssFvs = foldl union empty (map freeVarsOf rhss')
-        defnsFvs | isRec = difference rhssFvs binders
+        rhss' = map (calcFreeVars rhsLvs) $ rhssOf defns
+        defns' = zip (Set.toList binders) rhss'
+        expr' = calcFreeVars exprLvs expr
+        rhssFvs = foldl Set.union Set.empty (map freeVarsOf rhss')
+        defnsFvs | isRec = Set.difference rhssFvs binders
                  | otherwise = rhssFvs
-        bodyFvs = difference (freeVarsOf body') binders
+        bodyFvs = Set.difference (freeVarsOf expr') binders
 calcFreeVars localVars (ECase expr alts) = error "Not implemented yet"
 calcFreeVars localVars (EConstr t n) = error "Not implemented yet"
 
@@ -72,7 +78,7 @@ abstractExpr (freeVars, ALet isRec defns expr) =
 abstractExpr (freeVars, ALam args expr) =
     foldl EAp sc $ map EVar freeVarsList
     where
-        freeVarsList = toList freeVars
+        freeVarsList = Set.toList freeVars
         sc = ELet False [("sc", scBody)] (EVar "sc")
         scBody = ELam (freeVarsList ++ args) (abstractExpr expr)
 abstractExpr (freeVars, ACase expr alts) = error "Not implemented yet"
@@ -80,9 +86,59 @@ abstractExpr (freeVars, AConstr t a) = error "Not implemented yet"
 
 
 rename :: CoreProgram -> CoreProgram
+rename scs = snd $ mapAccumL renameSc initialNameSupply scs
+
+renameSc :: NameSupply -> ScDefn Name -> (NameSupply, ScDefn Name)
+renameSc ns (name, args, expr) =
+    (ns2, (name, args', expr'))
+    where
+        (ns1, args', mapping) = newNames ns args
+        (ns2, expr') = renameExpr mapping ns1 expr
 
 
-collectSc :: CoreProgram -> CoreProgram
+newNames :: NameSupply -> [Name] -> (NameSupply, [Name], Map Name Name)
+newNames ns names =
+    (ns', names', mapping)
+    where
+        (ns', names') = getNames ns names
+        mapping = Map.fromList $ zip names names'
+
+
+renameExpr :: Map Name Name -> NameSupply -> CoreExpr -> (NameSupply, CoreExpr)
+renameExpr mapping ns (ENum n) = (ns, ENum n)
+renameExpr mapping ns (EVar v) =
+    (ns, EVar v') -- for built-int functions (+,-, etc.) we have to use old name
+    where
+        v' = case Map.lookup v mapping of
+            (Just x) -> x
+            Nothing -> v
+renameExpr mapping ns (EAp e1 e2) =
+    (ns2, EAp e1 e2)
+    where
+        (ns1, e1') = renameExpr mapping ns e1
+        (ns2, e2') = renameExpr mapping ns1 e2
+renameExpr mapping ns (ELam args expr) =
+    (ns2, ELam args' expr')
+    where
+        (ns1, args', mapping') = newNames ns args
+        (ns2, expr') = renameExpr (Map.union mapping' mapping) ns1 expr
+renameExpr mapping ns (ELet isRec defns expr) =
+    (ns2, ELet isRec defns' expr')
+    where
+        binders = bindersOf defns
+        rhss = rhssOf defns
+        (ns1, binders', mapping') = newNames ns binders
+        exprMapping = (Map.union mapping' mapping)
+        defnsMapping | isRec = exprMapping
+                     | otherwise = mapping
+        (ns2, rhss') = mapAccumL (renameExpr mapping') ns1 rhss
+        (ns3, expr') = renameExpr exprMapping ns2 expr
+        defns' = zip binders' rhss'
+renameExpr mapping ns (ECase expr alts) = error "Not implemented yet"
+renameExpr mapping ns (EConstr t a) = error "Not implemented yet"
+
+
+--collectSc :: CoreProgram -> CoreProgram
 
 
 freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
