@@ -73,8 +73,10 @@ abstractExpr (freeVars, ALam args expr) =
     foldl EAp sc $ map EVar freeVarsList
     where
         freeVarsList = toList freeVars
-        sc = ELet False [("sc", )] (EVar "sc")
+        sc = ELet False [("sc", scBody)] (EVar "sc")
         scBody = ELam (freeVarsList ++ args) (abstractExpr expr)
+abstractExpr (freeVars, ACase expr alts) = error "Not implemented yet"
+abstractExpr (freeVars, AConstr t a) = error "Not implemented yet"
 
 
 rename :: CoreProgram -> CoreProgram
