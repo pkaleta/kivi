@@ -18,7 +18,7 @@ run :: [Char] -> [Char]
 run = showResults . eval . compile . parse
 
 runS :: [Char] -> [Char]
-runS = putStrLn . lift . parse
+runS = show . lift . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""

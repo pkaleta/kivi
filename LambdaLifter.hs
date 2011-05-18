@@ -9,6 +9,7 @@ import NameSupply
 import Data.Map (Map)
 import qualified Data.Map as Map
 import List
+import Debug.Trace
 
 
 type AnnExpr a b = (b, AnnExpr' a b)
@@ -139,13 +140,14 @@ renameExpr mapping ns (EConstr t a) = error "Not implemented yet"
 
 
 collectScs :: CoreProgram -> CoreProgram
-collectScs = foldl collectSc []
+collectScs scs = trace ("************************\n" ++ show scs ++ "\n\n\n\n")
+    foldl collectSc [] scs
 
 
 collectSc :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
-collectSc scAcc (name, args, expr) = [(name, args, expr')] ++ scAcc ++ scDefs
+collectSc scsAcc (name, args, expr) = trace ("***********" ++ show scs ++ "\n\n\n") [(name, args, expr')] ++ scsAcc ++ scs
     where
-        (scDefs, expr') = collectExpr expr
+        (scs, expr') = collectExpr expr
 
 
 collectExpr :: CoreExpr -> ([CoreScDefn], CoreExpr)
@@ -159,15 +161,25 @@ collectExpr (EAp e1 e2) =
 collectExpr (ELam args expr) = (scs, ELam args expr')
     where (scs, expr') = collectExpr expr
 collectExpr (ELet isRec defns expr) =
-    (scs1 ++ scs2, ELet isRec vars expr')
+    trace ("*************#########" ++ show vars) (defnsScs ++ localScs ++ exprScs, ELet isRec vars expr')
     where
-        scs1 = map createSc scDefns
-        (scDefns, vars) = partition isSc defns
+        (defnsScs, defns') = mapAccumL collectDef [] defns
+        localScs = map createSc scDefns
+        (scDefns, vars) = partition isSc defns'
+        (exprScs, expr') = collectExpr expr
+
+        -- is supercombinator predicate
         isSc (name, (ELam _ _)) = True
         isSc (name, _) = False
-        (scs2, expr') = collectExpr expr
 
+        -- helper function to create supercombinator
         createSc (name, ELam args expr) = (name, args, expr)
+
+        -- helper to extract supercombinators nested in definitions
+        collectDef scsAcc (name, expr) =
+            (scsAcc ++ scs, (name, expr'))
+            where (scs, expr') = collectExpr expr
+
 
 collectExpr (ECase expr alts) = error "Not implemented yet"
 collectExpr (EConstr t a) = error "Not implemented yet"
