@@ -117,6 +117,7 @@ renameExpr mapping ns (EVar v) =
             (Just x) -> x
             Nothing -> v
 renameExpr mapping ns (EAp e1 e2) =
+    --trace ("****************" ++ show mapping) $ 
     (ns2, EAp e1' e2')
     where
         (ns1, e1') = renameExpr mapping ns e1
@@ -135,7 +136,7 @@ renameExpr mapping ns (ELet isRec defns expr) =
         exprMapping = (Map.union mapping' mapping)
         defnsMapping | isRec = exprMapping
                      | otherwise = mapping
-        (ns2, rhss') = mapAccumL (renameExpr mapping') ns1 rhss
+        (ns2, rhss') = mapAccumL (renameExpr exprMapping) ns1 rhss
         (ns3, expr') = renameExpr exprMapping ns2 expr
         defns' = zip binders' rhss'
 renameExpr mapping ns (ECase expr alts) = error "Not implemented yet"
