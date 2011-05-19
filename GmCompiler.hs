@@ -87,8 +87,8 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
     where n = length defs
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
-compileR d (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
+--compileR d (ECase expr alts) env =
+--    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
 
