@@ -64,8 +64,19 @@ calcFreeVars localVars (ELet isRec defns expr) =
         defnsFvs | isRec = Set.difference rhssFvs binders
                  | otherwise = rhssFvs
         bodyFvs = Set.difference (freeVarsOf expr') binders
-calcFreeVars localVars (ECase expr alts) = error "Not implemented yet"
-calcFreeVars localVars (EConstr t n) = error "Not implemented yet"
+calcFreeVars localVars (ECase expr alts) =
+    (fvs, ACase expr' alts')
+    where
+        expr'@(exprFvs, _) = calcFreeVars localVars expr
+        (fvs, alts') = mapAccumL freeVarsAlts exprFvs alts
+
+        freeVarsAlts fvs (t, vars, body) =
+            (Set.union fvs (Set.difference bodyFvs varsSet), (t, vars, body'))
+            where
+                body'@(bodyFvs, _) = calcFreeVars (Set.union varsSet localVars) body
+                varsSet = Set.fromList vars
+calcFreeVars localVars (EConstr t n) =
+    (Set.empty, AConstr t n)
 
 
 abstract :: AnnProgram Name (Set Name) -> CoreProgram
@@ -117,7 +128,6 @@ renameExpr mapping ns (EVar v) =
             (Just x) -> x
             Nothing -> v
 renameExpr mapping ns (EAp e1 e2) =
-    --trace ("****************" ++ show mapping) $ 
     (ns2, EAp e1' e2')
     where
         (ns1, e1') = renameExpr mapping ns e1
