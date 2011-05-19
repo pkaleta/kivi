@@ -95,8 +95,12 @@ abstractExpr (freeVars, ALam args expr) =
         freeVarsList = Set.toList freeVars
         sc = ELet False [("sc", scBody)] (EVar "sc")
         scBody = ELam (freeVarsList ++ args) (abstractExpr expr)
-abstractExpr (freeVars, ACase expr alts) = error "Not implemented yet"
-abstractExpr (freeVars, AConstr t a) = error "Not implemented yet"
+abstractExpr (freeVars, ACase expr alts) =
+    ECase (abstractExpr expr) alts'
+    where
+        alts' = map abstractAlt alts
+        abstractAlt (t, vars, expr) = (t, vars, abstractExpr expr)
+abstractExpr (freeVars, AConstr t a) = EConstr t a
 
 
 rename :: CoreProgram -> CoreProgram
