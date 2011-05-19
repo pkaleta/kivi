@@ -164,8 +164,7 @@ renameExpr mapping ns (ECase expr alts) =
             where
                 (ns1, vars', mapping') = newNames ns vars
                 (ns2, body') = renameExpr (Map.union mapping' mapping) ns1 body
-
-renameExpr mapping ns (EConstr t a) = error "Not implemented yet"
+renameExpr mapping ns (EConstr t a) = (ns, EConstr t a)
 
 
 collectScs :: CoreProgram -> CoreProgram
@@ -208,14 +207,21 @@ collectExpr (ELet isRec defns expr) =
             (scsAcc ++ scs, (name, expr'))
             where (scs, expr') = collectExpr expr
 
+        --getting rid of let expressions with empty definitions part
         mkELet isRec vars expr =
             case length vars > 0 of
                 True -> ELet isRec vars expr
                 False -> expr
+collectExpr (ECase expr alts) =
+    (exprScs ++ altsScs, ECase expr' alts')
+    where
+        (exprScs, expr') = collectExpr expr
+        (altsScs, alts') = mapAccumL collectAlt [] alts
 
-
-collectExpr (ECase expr alts) = error "Not implemented yet"
-collectExpr (EConstr t a) = error "Not implemented yet"
+        collectAlt scs (t, vars, expr) =
+            (scs ++ exprScs, (t, vars, expr'))
+            where (exprScs, expr') = collectExpr expr
+collectExpr (EConstr t a) = ([], EConstr t a)
 
 
 freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
