@@ -153,7 +153,18 @@ renameExpr mapping ns (ELet isRec defns expr) =
         (ns2, rhss') = mapAccumL (renameExpr exprMapping) ns1 rhss
         (ns3, expr') = renameExpr exprMapping ns2 expr
         defns' = zip binders' rhss'
-renameExpr mapping ns (ECase expr alts) = error "Not implemented yet"
+renameExpr mapping ns (ECase expr alts) =
+    (ns2, ECase expr' alts')
+    where
+        (ns1, expr') = renameExpr mapping ns expr
+        (ns2, alts') = mapAccumL (renameAlt mapping) ns1 alts
+
+        renameAlt mapping ns (t, vars, body) =
+            (ns2, (t, vars', body'))
+            where
+                (ns1, vars', mapping') = newNames ns vars
+                (ns2, body') = renameExpr (Map.union mapping' mapping) ns1 body
+
 renameExpr mapping ns (EConstr t a) = error "Not implemented yet"
 
 
