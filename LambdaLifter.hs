@@ -172,9 +172,14 @@ collectScs scs = foldl collectSc [] scs
 
 
 collectSc :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
-collectSc scsAcc (name, args, expr) = [(name, args, expr')] ++ scsAcc ++ scs
+collectSc scsAcc (name, args, expr) =
+    [(name, args', expr')] ++ scsAcc ++ scs
     where
-        (scs, expr') = collectExpr expr
+        (args', (scs, expr')) = case expr of
+                                    (ELet isRec [(scName, (ELam lamArgs lamExpr))] letBody) ->
+                                        (lamArgs, collectExpr lamExpr)
+                                    expr ->
+                                        (args, collectExpr expr)
 
 
 collectExpr :: CoreExpr -> ([CoreScDefn], CoreExpr)
