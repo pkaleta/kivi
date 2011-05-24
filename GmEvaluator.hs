@@ -15,10 +15,13 @@ import Data.List.Utils
 
 
 run :: [Char] -> [Char]
-run = showResults . eval . compile . lift . parse
+run = showResults . eval . compile . lambdaLift . parse
 
 runS :: [Char] -> [Char]
-runS = show . lift . parse
+runS = show . lambdaLift . parse
+
+--runF :: [Char] -> [Char]
+--runF :: show . lazyLambdaLift . lambdaLift . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""

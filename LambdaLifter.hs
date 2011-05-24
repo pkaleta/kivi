@@ -28,8 +28,8 @@ type AnnAlt a b = (Int, [a], AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 
 
-lift :: CoreProgram -> CoreProgram
-lift = collectScs . rename . abstract . freeVars
+lambdaLift :: CoreProgram -> CoreProgram
+lambdaLift = collectScs . rename . abstract . freeVars
 
 
 freeVars :: CoreProgram -> AnnProgram Name (Set Name)
@@ -232,3 +232,108 @@ collectExpr (EConstr t a) = ([], EConstr t a)
 
 freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
 freeVarsOf (fvs, _) = fvs
+
+
+------------------ lazy lambda lifter
+
+--lazyLambdaLift :: CoreProgram -> CoreProgram
+--lazyLambdaLift = float . renameL . identifyMFEs . annotateLevels . separateLambdas
+
+
+separateLambdas :: CoreProgram -> CoreProgram
+separateLambdas [] = []
+separateLambdas ((name, args, expr) : scs) = (name, [], mkSepArgs args $ separateLambdasExpr expr) : separateLambdas scs
+
+
+separateLambdasExpr :: CoreExpr -> CoreExpr
+separateLambdasExpr (ENum n) = (ENum n)
+separateLambdasExpr (EVar v) = (EVar v)
+separateLambdasExpr (EConstr t a) = (EConstr t a)
+separateLambdasExpr (EAp e1 e2) = EAp (separateLambdasExpr e1) (separateLambdasExpr e2)
+separateLambdasExpr (ECase expr alts) =
+    ECase (separateLambdasExpr expr) $ map mkAlt alts
+    where
+        mkAlt (t, args, expr) = (t, args, separateLambdasExpr expr)
+separateLambdasExpr (ELam args body) =
+    mkSepArgs args body'
+    where body' = separateLambdasExpr body
+separateLambdasExpr (ELet isRec defns body) =
+    ELet isRec (map mkDefn defns) (separateLambdasExpr body)
+    where
+        mkDefn (name, expr) = (name, separateLambdasExpr expr)
+
+
+mkSepArgs :: [Name] -> CoreExpr -> CoreExpr
+mkSepArgs args expr = foldr mkELam expr args
+    where
+        mkELam arg expr = ELam [arg] expr
+
+
+type Level = Int
+annotateLevels :: CoreProgram -> AnnProgram (Name, Level) Level
+annotateLevels = freeToLevel . freeVars
+
+
+freeToLevel :: AnnProgram Name (Set Name) -> AnnProgram (Name, Level) Level
+freeToLevel [] = []
+freeToLevel ((name, [], expr) : scs) = (name, [], freeToLevelExpr expr) : freeToLevel scs
+
+
+freeToLevelExpr :: Level -> Map Name Level -> AnnExpr Name (Set Name) -> AnnExpr (Name, Level) Level
+freeToLevelExpr level env (free, ANum n) = (0, ANum n)
+freeToLevelExpr level env (free, AVar v) = (varLevel, AVar v)
+    where
+        varLevel = case Map.lookup v env of
+            Just level -> level
+            Nothing -> 0
+freeToLevelExpr level env (free, AConstr t a) = (0, AConstr t a)
+freeToLevelExpr level env (free, AAp e1 e2) = (max e1Level e2Level, AAp e1' e2')
+    where
+        e1'@(e1Level, _) = freeToLevelExpr level env e1
+        e2'@(e2Level, _) = freeToLevelExpr level env e2
+freeToLevelExpr level env (free, ALam args expr) =
+    (freeSetToLevel env free, ALam args' expr')
+    where
+        expr' = freeToLevelExpr level' (Map.union args' env) expr
+        args' = [(arg, level') | arg <- args]
+        level' = level + 1
+freeToLevelExpr level env (free, ALet isRec defns expr) =
+    (exprLevel, ALet isRec defns' expr')
+    where
+        binders = bindersOf defns
+        rhss = rhssOf defns
+
+        binders' = [(name, maxRhsLevel) | name <- binders]
+        rhss' = [freeToLevelExpr level rhssEnv rhs | rhs <- rhss]
+        expr'@(exprLevel, _) = freeToLevelExpr level exprEnv expr
+        defns' = zip binders' rhss'
+
+        rhssFreeVars = foldl collectFreeVars Set.empty rhss
+        maxRhsLevel = freeSetToLevel rhssLevelEnv rhssFreeVars
+
+        exprEnv = Set.union (Set.fromList defns') env
+
+        rhssEnv | isRec = exprEnv
+                | otherwise = env
+
+        rhssLevelEnv | isRec = Map.union Map.fromList([(name, 0) | name <- binders]) env
+                     | otherwise = env
+
+        -- helper function to collect free variables from right had side
+        -- expressions in definitions
+        collectFreeVars freeVars (free, rhs) = Set.union freeVars free
+
+
+freeSetToLevel :: Map Name Level -> Set Name -> Level
+freeSetToLevel env free =
+    foldl max 0 $ [Map.lookup var env | var <- Set.toList free]
+
+
+--identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
+
+
+--renameL :: Program (Name, a) -> Program (Name, a)
+
+
+--float :: Program (Name, a) -> CoreProgram
+
