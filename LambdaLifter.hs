@@ -193,29 +193,30 @@ collectExpr (EAp e1 e2) =
 collectExpr (ELam args expr) = (scs, ELam args expr')
     where (scs, expr') = collectExpr expr
 collectExpr (ELet isRec defns expr) =
-    (defnsScs ++ localScs ++ exprScs, mkELet isRec vars expr')
+    (defnsScs ++ localScs ++ exprScs, mkELet isRec varDefns expr')
     where
-        (defnsScs, defns') = mapAccumL collectDef [] defns
-        localScs = map createSc scDefns
-        (scDefns, vars) = partition isSc defns'
+        (defnsScs, defns') = foldl collectDef ([], []) defns
+        (scDefns, varDefns) = partition isSc defns'
+        -- supercombinators declared locally in defns as lambda expressions
+        localScs = [(name, args, expr) | (name, ELam args expr) <- scDefns]
         (exprScs, expr') = collectExpr expr
 
         -- is supercombinator predicate
         isSc (name, (ELam _ _)) = True
         isSc (name, _) = False
 
-        -- helper function to create supercombinator
-        createSc (name, ELam args expr) = (name, args, expr)
-
         -- helper to extract supercombinators nested in definitions
-        collectDef scsAcc (name, expr) =
-            (scsAcc ++ scs, (name, expr'))
-            where (scs, expr') = collectExpr expr
+        collectDef (scsAcc, defnsAcc) (name, expr) =
+            case collectExpr expr of
+                ([(scName1, scArgs, scExpr)], (EVar scName2)) | scName1 == scName2 ->
+                    (scsAcc ++ [(name, scArgs, scExpr)], defnsAcc)
+                (scs, expr') ->
+                    (scsAcc ++ scs, (name, expr') : defnsAcc)
 
         --getting rid of let expressions with empty definitions part
-        mkELet isRec vars expr =
-            case length vars > 0 of
-                True -> ELet isRec vars expr
+        mkELet isRec varDefns expr =
+            case length varDefns > 0 of
+                True -> ELet isRec varDefns expr
                 False -> expr
 collectExpr (ECase expr alts) =
     (exprScs ++ altsScs, ECase expr' alts')
