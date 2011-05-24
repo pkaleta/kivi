@@ -276,7 +276,7 @@ annotateLevels = freeToLevel . freeVars
 
 freeToLevel :: AnnProgram Name (Set Name) -> AnnProgram (Name, Level) Level
 freeToLevel [] = []
-freeToLevel ((name, [], expr) : scs) = (name, [], freeToLevelExpr expr) : freeToLevel scs
+freeToLevel ((name, [], expr) : scs) = (name, [], freeToLevelExpr 0 Map.empty expr) : freeToLevel scs
 
 
 freeToLevelExpr :: Level -> Map Name Level -> AnnExpr Name (Set Name) -> AnnExpr (Name, Level) Level
@@ -294,7 +294,7 @@ freeToLevelExpr level env (free, AAp e1 e2) = (max e1Level e2Level, AAp e1' e2')
 freeToLevelExpr level env (free, ALam args expr) =
     (freeSetToLevel env free, ALam args' expr')
     where
-        expr' = freeToLevelExpr level' (Map.union args' env) expr
+        expr' = freeToLevelExpr level' (Map.union (Map.fromList args') env) expr
         args' = [(arg, level') | arg <- args]
         level' = level + 1
 freeToLevelExpr level env (free, ALet isRec defns expr) =
@@ -311,12 +311,12 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
         rhssFreeVars = foldl collectFreeVars Set.empty rhss
         maxRhsLevel = freeSetToLevel rhssLevelEnv rhssFreeVars
 
-        exprEnv = Set.union (Set.fromList defns') env
+        exprEnv = Map.union (Map.fromList binders') env
 
         rhssEnv | isRec = exprEnv
                 | otherwise = env
 
-        rhssLevelEnv | isRec = Map.union Map.fromList([(name, 0) | name <- binders]) env
+        rhssLevelEnv | isRec = Map.union (Map.fromList [(name, 0) | name <- binders]) env
                      | otherwise = env
 
         -- helper function to collect free variables from right had side
@@ -326,7 +326,9 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
 freeSetToLevel env free =
-    foldl max 0 $ [Map.lookup var env | var <- Set.toList free]
+    foldl max 0 $ [ case Map.lookup var env of
+        Just level -> level
+        Nothing -> 0 | var <- (Set.toList free)]
 
 
 --identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
