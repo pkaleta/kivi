@@ -322,6 +322,7 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
         -- helper function to collect free variables from right had side
         -- expressions in definitions
         collectFreeVars freeVars (free, rhs) = Set.union freeVars free
+freeToLevelExpr level env (free, ACase expr alts) = error "Not implemented yet."
 
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
@@ -331,7 +332,39 @@ freeSetToLevel env free =
         Nothing -> 0 | var <- (Set.toList free)]
 
 
---identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
+identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
+identifyMFEs scs = [(name, [], identifyMFEsExpr 0 expr) | (name, [], expr) <- scs]
+
+
+identifyMFEsExpr :: Level -> AnnExpr (Name, Level) Level -> Expr (Name, Level)
+identifyMFEsExpr cxtLevel (exprLevel, expr) =
+    case exprLevel == cxtLevel || notMFECandidate expr of
+        True -> expr'
+        False -> transformMFE exprLevel expr'
+
+    where
+        expr' = identifyMFEsExpr1 exprLevel expr
+
+        notMFECandidate (ANum n) = True
+        notMFECandidate (AVar v) = True
+        notMFECandidate (AConstr t a) = True
+        notMFECandidate _ = False
+
+        transformMFE level expr = ELet False [(("v", level), expr)] (EVar "v")
+
+
+identifyMFEsExpr1 :: Level -> AnnExpr' (Name, Level) Level -> Expr (Name, Level)
+identifyMFEsExpr1 level (ANum n) = ENum n
+identifyMFEsExpr1 level (AVar v) = EVar v
+identifyMFEsExpr1 level (AConstr t a) = EConstr t a
+identifyMFEsExpr1 level (AAp e1 e2) = EAp (identifyMFEsExpr level e1) (identifyMFEsExpr level e2)
+identifyMFEsExpr1 level (ALam args@[(name, argLevel)] expr) = ELam args (identifyMFEsExpr argLevel expr)
+identifyMFEsExpr1 level (ALet isRec defns expr) =
+    ELet isRec defns' expr'
+    where
+        defns' = [((name, defnLevel), identifyMFEsExpr defnLevel rhs) | ((name, defnLevel), rhs) <- defns]
+        expr' = identifyMFEsExpr level expr
+identifyMFEsExpr1 level (ACase expr alts) = error "Not implemented yet."
 
 
 --renameL :: Program (Name, a) -> Program (Name, a)
