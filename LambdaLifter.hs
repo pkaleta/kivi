@@ -110,7 +110,7 @@ renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSu
 
 
 rename :: CoreProgram -> CoreProgram
-rename scs = renameGen newNames scs
+rename = renameGen newNames
 
 
 newNames :: NameSupply -> [Name] -> (NameSupply, [Name], Map Name Name)
@@ -380,14 +380,19 @@ identifyMFEsExpr1 level (ALet isRec defns expr) =
 identifyMFEsExpr1 level (ACase expr alts) = error "Not implemented yet."
 
 
---renameL :: Program (Name, a) -> Program (Name, a)
---renameL = renameGen newNamesL
-
--- TODO: implement
+renameL :: Program (Name, Level) -> Program (Name, Level)
+renameL = renameGen newNamesL
 
 
-
---newNamesL = 
+newNamesL :: NameSupply -> [(Name, Level)] -> (NameSupply, [(Name, Level)], Map Name Name)
+newNamesL ns names =
+    (ns', names2, mapping)
+    where
+        names0 = map fst names
+        levels = map snd names
+        (ns', names1) = getNames ns names0
+        names2 = zip names1 levels
+        mapping = Map.fromList $ zip names0 names1
 
 
 --float :: Program (Name, a) -> CoreProgram
