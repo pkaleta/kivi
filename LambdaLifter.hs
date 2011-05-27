@@ -436,4 +436,16 @@ floatExpr (ELam args expr) =
             foldr wrapDefn expr floatedDefns
             where
                 wrapDefn (level, isRec, defns) expr = ELet isRec defns expr
+floatExpr (ELet isRec defns expr) =
+    (defnsFds ++ [localFd] ++ exprFds, ELet isRec defns' expr')
+    where
+        (exprFds, expr') = floatExpr expr
+        (defnsFds, defns') = mapAccumL collectDefns [] defns
+        localFd = (level, isRec, defns')
+        ((name, level), _firstDefn) = head defns
+
+        collectDefns defnsAcc ((name, level), rhs) =
+            (rhsFds ++ defnsAcc, (name, rhs'))
+            where
+                (rhsFds, rhs') = floatExpr rhs
 
