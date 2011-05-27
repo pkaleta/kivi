@@ -250,8 +250,8 @@ freeVarsOf (fvs, _) = fvs
 
 ------------------ lazy lambda lifter
 
---lazyLambdaLift :: CoreProgram -> CoreProgram
---lazyLambdaLift = float . renameL . identifyMFEs . annotateLevels . separateLambdas
+lazyLambdaLift :: CoreProgram -> CoreProgram
+lazyLambdaLift = float . renameL . identifyMFEs . annotateLevels . separateLambdas
 
 
 separateLambdas :: CoreProgram -> CoreProgram
@@ -398,6 +398,7 @@ newNamesL ns names =
 
 float :: Program (Name, Level) -> CoreProgram
 float = foldl collectFloatedSc []
+
 
 collectFloatedSc :: [CoreScDefn] -> ScDefn (Name, Level) -> [CoreScDefn]
 collectFloatedSc scsAcc (name, [], expr) =
