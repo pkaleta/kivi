@@ -26,6 +26,7 @@ data AnnExpr' a b = AVar Name
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, [a], AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
+type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
 
 
 lambdaLift :: CoreProgram -> CoreProgram
@@ -395,5 +396,44 @@ newNamesL ns names =
         mapping = Map.fromList $ zip names0 names1
 
 
---float :: Program (Name, a) -> CoreProgram
+float :: Program (Name, Level) -> CoreProgram
+float = foldl collectFloatedSc []
+
+collectFloatedSc :: [CoreScDefn] -> ScDefn (Name, Level) -> [CoreScDefn]
+collectFloatedSc scsAcc (name, [], expr) =
+    scsAcc ++ [(name, [], expr')] ++ floatedScs
+    where
+        (fds, expr') = floatExpr expr
+        floatedScs = foldl createScs [] fds
+
+        createScs scs (level, isRec, defns) =
+            scs ++ map createSc defns
+
+        createSc (name, defn) = (name, [], defn)
+
+
+floatExpr :: Expr (Name, Level) -> (FloatedDefns, Expr Name)
+floatExpr (ENum n) = ([], ENum n)
+floatExpr (EVar v) = ([], EVar v)
+floatExpr (EConstr t a) = ([], EConstr t a)
+floatExpr (EAp e1 e2) = (fds1 ++ fds2, EAp e1' e2')
+    where
+        (fds1, e1') = floatExpr e1
+        (fds2, e2') = floatExpr e2
+floatExpr (ELam args expr) =
+    (outerFds, ELam args' $ wrap innerFds expr')
+    where
+        args' = [arg | (arg, level) <- args]
+        (arg, curLevel) = head args
+        (fdBody, expr') = floatExpr expr
+        (innerFds, outerFds) = partition checkLevel fdBody
+
+        -- predicate to partition the definitions based on definition level
+        checkLevel (level, isRec, defns) = level >= curLevel
+
+        -- helper function which wraps an expr into let binding with given defns
+        wrap floatedDefns expr =
+            foldr wrapDefn expr floatedDefns
+            where
+                wrapDefn (level, isRec, defns) expr = ELet isRec defns expr
 
