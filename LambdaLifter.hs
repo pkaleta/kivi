@@ -103,16 +103,14 @@ abstractExpr (freeVars, ACase expr alts) =
 abstractExpr (freeVars, AConstr t a) = EConstr t a
 
 
+renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+          -> Program a
+          -> Program a
+renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
+
+
 rename :: CoreProgram -> CoreProgram
-rename scs = snd $ mapAccumL renameSc initialNameSupply scs
-
-
-renameSc :: NameSupply -> CoreScDefn -> (NameSupply, CoreScDefn)
-renameSc ns (name, args, expr) =
-    (ns2, (name, args', expr'))
-    where
-        (ns1, args', mapping) = newNames ns args
-        (ns2, expr') = renameExpr mapping ns1 expr
+rename scs = renameGen newNames scs
 
 
 newNames :: NameSupply -> [Name] -> (NameSupply, [Name], Map Name Name)
@@ -123,48 +121,63 @@ newNames ns names =
         mapping = Map.fromList $ zip names names'
 
 
-renameExpr :: Map Name Name -> NameSupply -> CoreExpr -> (NameSupply, CoreExpr)
-renameExpr mapping ns (ENum n) = (ns, ENum n)
-renameExpr mapping ns (EVar v) =
+renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+         -> NameSupply
+         -> ScDefn a
+         -> (NameSupply, ScDefn a)
+renameSc newNamesFun ns (name, args, expr) =
+    (ns2, (name, args', expr'))
+    where
+        (ns1, args', mapping) = newNamesFun ns args
+        (ns2, expr') = renameExpr newNamesFun mapping ns1 expr
+
+
+renameExpr :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name)) -- function used to create new names for variables
+           -> Map Name Name
+           -> NameSupply
+           -> Expr a
+           -> (NameSupply, Expr a)
+renameExpr newNamesFun mapping ns (ENum n) = (ns, ENum n)
+renameExpr newNamesFun mapping ns (EVar v) =
     (ns, EVar v') -- for built-int functions (+,-, etc.) we have to use old name
     where
         v' = case Map.lookup v mapping of
             (Just x) -> x
             Nothing -> v
-renameExpr mapping ns (EAp e1 e2) =
+renameExpr newNamesFun mapping ns (EAp e1 e2) =
     (ns2, EAp e1' e2')
     where
-        (ns1, e1') = renameExpr mapping ns e1
-        (ns2, e2') = renameExpr mapping ns1 e2
-renameExpr mapping ns (ELam args expr) =
+        (ns1, e1') = renameExpr newNamesFun mapping ns e1
+        (ns2, e2') = renameExpr newNamesFun mapping ns1 e2
+renameExpr newNamesFun mapping ns (ELam args expr) =
     (ns2, ELam args' expr')
     where
-        (ns1, args', mapping') = newNames ns args
-        (ns2, expr') = renameExpr (Map.union mapping' mapping) ns1 expr
-renameExpr mapping ns (ELet isRec defns expr) =
+        (ns1, args', mapping') = newNamesFun ns args
+        (ns2, expr') = renameExpr newNamesFun (Map.union mapping' mapping) ns1 expr
+renameExpr newNamesFun mapping ns (ELet isRec defns expr) =
     (ns2, ELet isRec defns' expr')
     where
         binders = bindersOf defns
         rhss = rhssOf defns
-        (ns1, binders', mapping') = newNames ns binders
+        (ns1, binders', mapping') = newNamesFun ns binders
         exprMapping = (Map.union mapping' mapping)
         defnsMapping | isRec = exprMapping
                      | otherwise = mapping
-        (ns2, rhss') = mapAccumL (renameExpr exprMapping) ns1 rhss
-        (ns3, expr') = renameExpr exprMapping ns2 expr
+        (ns2, rhss') = mapAccumL (renameExpr newNamesFun exprMapping) ns1 rhss
+        (ns3, expr') = renameExpr newNamesFun exprMapping ns2 expr
         defns' = zip binders' rhss'
-renameExpr mapping ns (ECase expr alts) =
+renameExpr newNamesFun mapping ns (ECase expr alts) =
     (ns2, ECase expr' alts')
     where
-        (ns1, expr') = renameExpr mapping ns expr
+        (ns1, expr') = renameExpr newNamesFun mapping ns expr
         (ns2, alts') = mapAccumL (renameAlt mapping) ns1 alts
 
         renameAlt mapping ns (t, vars, body) =
             (ns2, (t, vars', body'))
             where
-                (ns1, vars', mapping') = newNames ns vars
-                (ns2, body') = renameExpr (Map.union mapping' mapping) ns1 body
-renameExpr mapping ns (EConstr t a) = (ns, EConstr t a)
+                (ns1, vars', mapping') = newNamesFun ns vars
+                (ns2, body') = renameExpr newNamesFun (Map.union mapping' mapping) ns1 body
+renameExpr newNamesFun mapping ns (EConstr t a) = (ns, EConstr t a)
 
 
 collectScs :: CoreProgram -> CoreProgram
@@ -368,6 +381,13 @@ identifyMFEsExpr1 level (ACase expr alts) = error "Not implemented yet."
 
 
 --renameL :: Program (Name, a) -> Program (Name, a)
+--renameL = renameGen newNamesL
+
+-- TODO: implement
+
+
+
+--newNamesL = 
 
 
 --float :: Program (Name, a) -> CoreProgram
