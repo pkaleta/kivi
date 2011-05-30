@@ -27,6 +27,7 @@ type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, [a], AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
+type Level = Int
 
 
 lambdaLift :: CoreProgram -> CoreProgram
@@ -283,7 +284,6 @@ mkSepArgs args expr = foldr mkELam expr args
         mkELam arg expr = ELam [arg] expr
 
 
-type Level = Int
 annotateLevels :: CoreProgram -> AnnProgram (Name, Level) Level
 annotateLevels = freeToLevel . freeVars
 
@@ -438,7 +438,7 @@ floatExpr (ELam args expr) =
             where
                 wrapDefn (level, isRec, defns) expr = ELet isRec defns expr
 floatExpr (ELet isRec defns expr) =
-    (defnsFds ++ [localFd] ++ exprFds, ELet isRec defns' expr')
+    (defnsFds ++ [localFd] ++ exprFds, expr')
     where
         (exprFds, expr') = floatExpr expr
         (defnsFds, defns') = mapAccumL collectDefns [] defns

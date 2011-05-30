@@ -15,13 +15,13 @@ import Data.List.Utils
 
 
 run :: [Char] -> [Char]
-run = showResults . eval . compile . lambdaLift . parse
+run = showResults . eval . compile . lambdaLift . lazyLambdaLift . parse
 
 runS :: [Char] -> [Char]
 runS = show . lambdaLift . parse
 
---runF :: [Char] -> [Char]
---runF :: show . lazyLambdaLift . lambdaLift . parse
+runF :: [Char] -> [Char]
+runF = show . lambdaLift . lazyLambdaLift . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
@@ -107,13 +107,13 @@ newState (NNum n) state = unwindDump state
 newState (NConstr t as) state = unwindDump state
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
 newState (NGlobal argc code) state =
-    case argc > length stack - 1 of
+    case argc > length stack - 1 of -- if the number of arguments on the stack is not sufficient for this supercombinator
         True ->
             case dump of
                 [] ->
                     error "Not enough arguments on the stack"
                 ((is, as, vs) : dump') ->
-                    putCode is $ putStack (head stack : as) $ putVStack vs state
+                    putCode is $ putStack (last stack : as) $ putVStack vs state
         False ->
             putCode code $ putStack (rearrange argc heap stack) state
     where
