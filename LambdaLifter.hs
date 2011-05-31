@@ -389,7 +389,11 @@ identifyMFEsExpr1 level (ALet isRec defns expr) =
     where
         defns' = [((name, defnLevel), identifyMFEsExpr defnLevel rhs) | ((name, defnLevel), rhs) <- defns]
         expr' = identifyMFEsExpr level expr
-identifyMFEsExpr1 level (ACase expr alts) = error "Not implemented yet."
+identifyMFEsExpr1 level (ACase expr@(exprLevel, _) alts) =
+    ECase expr' alts'
+    where
+        expr' = identifyMFEsExpr level expr
+        alts' = [(tag, args, identifyMFEsExpr bodyLevel body) | (tag, args, body@(bodyLevel, _)) <- alts]
 
 
 renameL :: Program (Name, Level) -> Program (Name, Level)
@@ -460,4 +464,5 @@ floatExpr (ELet isRec defns expr) =
             (rhsFds ++ defnsAcc, (name, rhs'))
             where
                 (rhsFds, rhs') = floatExpr rhs
+floatExpr (ECase expr alts) = error "Not implemented yet."
 
