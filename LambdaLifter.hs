@@ -252,7 +252,7 @@ freeVarsOf (fvs, _) = fvs
 ------------------ lazy lambda lifter
 
 lazyLambdaLift :: CoreProgram -> CoreProgram
-lazyLambdaLift = float . renameL . identifyMFEs . annotateLevels . separateLambdas
+lazyLambdaLift = float . mergeLambdas . renameL . identifyMFEs . annotateLevels . separateLambdas
 
 
 separateLambdas :: CoreProgram -> CoreProgram
@@ -411,6 +411,22 @@ newNamesL ns names =
         mapping = Map.fromList $ zip names0 names1
 
 
+mergeLambdas :: Program (Name, Level) -> Program (Name, Level)
+mergeLambdas scs = [(name, args, mergeLambdasExpr expr) | (name, args, expr) <- scs]
+
+
+mergeLambdasExpr :: Expr (Name, Level) -> Expr (Name, Level)
+mergeLambdasExpr (ELam args expr) =
+    case expr' of
+        (ELam args' innerExpr) ->
+            ELam (args ++ args') innerExpr
+        _ ->
+            ELam args expr'
+    where
+        expr' = mergeLambdasExpr expr
+mergeLambdasExpr expr = expr
+
+
 float :: Program (Name, Level) -> CoreProgram
 float = foldl collectFloatedSc []
 
@@ -428,7 +444,7 @@ collectFloatedSc scsAcc (name, [], expr) =
         createSc (name, defn) = (name, [], defn)
 
 
-floatExpr :: Expr (Name, Level) -> (FloatedDefns, Expr Name)
+floatExpr :: Expr (Name, Level) -> (FloatedDefns, CoreExpr)
 floatExpr (ENum n) = ([], ENum n)
 floatExpr (EVar v) = ([], EVar v)
 floatExpr (EConstr t a) = ([], EConstr t a)
