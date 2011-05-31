@@ -464,5 +464,16 @@ floatExpr (ELet isRec defns expr) =
             (rhsFds ++ defnsAcc, (name, rhs'))
             where
                 (rhsFds, rhs') = floatExpr rhs
-floatExpr (ECase expr alts) = error "Not implemented yet."
+floatExpr (ECase expr alts) =
+    (exprFds ++ altsFds, ECase expr' alts')
+    where
+        (exprFds, expr') = floatExpr expr
+
+        (altsFds, alts') = mapAccumL collectAlts [] alts
+
+        collectAlts altsAcc (tag, args, altExpr) =
+            (altFds ++ altsAcc, (tag, args', altExpr'))
+            where
+                (altFds, altExpr') = floatExpr altExpr
+                args' = map fst args
 
