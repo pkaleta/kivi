@@ -393,7 +393,7 @@ identifyMFEsExpr1 level (ACase expr@(exprLevel, _) alts) =
     ECase expr' alts'
     where
         expr' = identifyMFEsExpr level expr
-        alts' = [(tag, args, identifyMFEsExpr bodyLevel body) | (tag, args, body@(bodyLevel, _)) <- alts]
+        alts' = [(tag, args, identifyMFEsExpr level body) | (tag, args, body@(bodyLevel, _)) <- alts]
 
 
 renameL :: Program (Name, Level) -> Program (Name, Level)
