@@ -336,7 +336,18 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
         -- helper function to collect free variables from right had side
         -- expressions in definitions
         collectFreeVars freeVars (free, rhs) = Set.union freeVars free
-freeToLevelExpr level env (free, ACase expr alts) = error "Not implemented yet."
+freeToLevelExpr level env (free, ACase expr alts) =
+    (freeSetToLevel env free, ACase expr' alts')
+    where
+        expr'@(exprLevel, _) = freeToLevelExpr level env expr
+        alts' = map mapAlt alts
+
+        mapAlt (tag, args, altExpr) =
+            (tag, args', altExpr')
+            where
+                args' = [(arg, exprLevel) | arg <- args]
+                env' = Map.union (Map.fromList args') env
+                altExpr' = freeToLevelExpr level env' altExpr
 
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
