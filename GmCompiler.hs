@@ -87,8 +87,8 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
     where n = length defs
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
---compileR d (ECase expr alts) env =
---    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
+compileR d (ECase expr alts) env =
+    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
 
@@ -159,30 +159,17 @@ compileC (EVar v) env =
 compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
 compileC (ENum n) env = [Pushint n]
 compileC (EAp e1 e2) env =
---fst $ compileAp (EAp e1 e2) env
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
-compileC x env = error $ show x
+compileC (ECase expr alts) env =
+    compileE expr env ++ [Casejump $ compileD compileE alts env]
+compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
 
 
 constrFunctionName t n = "Pack{" ++ show t ++ "," ++ show n ++ "}"
-
-
---compileAp :: CoreExpr -> GmEnvironment -> (GmCode, Int)
---compileAp (EConstr t n) env = ([Pack t n], n)
---compileAp (EAp e1 e2) env =
---    case n > 0 of
---        True ->
---            (codeE2 ++ codeE1, n - 1)
---        False ->
---            (codeE2 ++ codeE1 ++ [Mkap], 0)
---    where
---        (codeE2, _) = compileAp e2 env
---        (codeE1, n) = compileAp e1 (argOffset 1 env)
---compileAp node env = (compileC node env, 0)
 
 
 compileLet :: [Instruction] -> GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
