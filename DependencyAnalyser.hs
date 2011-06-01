@@ -75,8 +75,11 @@ analyseExpr (free, ALet isRec defns expr) =
         binderComponents = scc ins outs binders
 
         splitLet binderSet letExpr =
-            ELet isRec localDefns letExpr
+            ELet True defns' letExpr
             where
                 binders = Set.toList binderSet
-                localDefns = [(name, analyseExpr $ aLookup defns name $ error "impossible") | name <- binders]
+                localDefns = [(name, aLookup defns name $ error "impossible") | name <- binders]
+                freeVars = foldl Set.union Set.empty $ [free | (name, (free, rhs)) <- localDefns]
+                defns' = [(name, analyseExpr rhs) | (name, rhs) <- localDefns]
+                isRec = Set.intersection freeVars binderSet /= Set.empty
 
