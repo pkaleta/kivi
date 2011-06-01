@@ -11,17 +11,21 @@ import GmCompiler
 import LambdaLifter
 import Text.Regex.Posix
 import Data.List.Utils
+import DependencyAnalyser
 --import Gc
 
 
 run :: [Char] -> [Char]
-run = showResults . eval . compile . lambdaLift . lazyLambdaLift . parse
+run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyse . parse
 
 runS :: [Char] -> [Char]
 runS = show . lambdaLift . parse
 
 runF :: [Char] -> [Char]
 runF = show . lambdaLift . lazyLambdaLift . parse
+
+runD :: [Char] -> [Char]
+runD = show . analyse . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""

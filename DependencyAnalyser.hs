@@ -5,6 +5,7 @@ import Data.Set as Set
 import LambdaLifter
 import Utils
 import Common
+import Debug.Trace
 
 
 dfs :: Ord a => (a -> [a]) -- returns the vertices available from the current vertex
@@ -23,25 +24,24 @@ dfsHelper succ (vis, seq) v =
             where (vis', seq') = dfs succ (Set.union vis $ Set.singleton v, seq) (succ v)
 
 
-spanDfs :: Ord a => (a -> [a]) -> (Set a, [Set a]) -> [a] -> (Set a, [Set a])
+spanDfs :: Show a => Ord a => (a -> [a]) -> (Set a, [Set a]) -> [a] -> (Set a, [Set a])
 spanDfs succ = foldl (spanDfsHelper succ)
 
 
-spanDfsHelper :: Ord a => (a -> [a]) -> (Set a, [Set a]) -> a -> (Set a, [Set a])
+spanDfsHelper :: Show a => Ord a => (a -> [a]) -> (Set a, [Set a]) -> a -> (Set a, [Set a])
 spanDfsHelper succ (vis, setSeq) v =
     case Set.member v vis of
         True -> (vis, setSeq)
         False ->
             (vis', Set.fromList (v : seq) : setSeq)
-            where (vis', seq) = dfs succ (Set.union vis $ Set.singleton v, seq) (succ v)
+            where (vis', seq) = dfs succ (Set.union vis $ Set.singleton v, []) (succ v)
 
 
-scc :: Ord a => (a -> [a]) -> (a -> [a]) -> [a] -> [Set a]
-scc ins outs vs =
-    snd topSortedSccs
+scc :: Show a => Ord a => (a -> [a]) -> (a -> [a]) -> [a] -> [Set a]
+scc ins outs vs = topSortedSccs
     where
         topSortedVs = snd $ dfs outs (Set.empty, []) vs
-        topSortedSccs = spanDfs ins (Set.empty, []) topSortedVs
+        topSortedSccs = snd $ spanDfs ins (Set.empty, []) topSortedVs
 
 
 analyse :: CoreProgram -> CoreProgram
@@ -67,7 +67,7 @@ analyseExpr (free, ALet isRec defns expr) =
         es = foldl getEdges [] defns
 
         ins v = [a | (a, b) <- es, v == b]
-        outs v = [a | (a, b) <- es, v == a]
+        outs v = [b | (a, b) <- es, v == a]
 
         getEdges edges (name, (rhsFree, rhs)) =
             edges ++ [(name, v) | v <- (Set.toList $ Set.intersection binderSet rhsFree)]
