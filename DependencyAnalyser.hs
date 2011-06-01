@@ -2,6 +2,9 @@ module DependencyAnalyser where
 
 
 import Data.Set as Set
+import LambdaLifter
+import Utils
+import Common
 
 
 dfs :: Ord a => (a -> [a]) -- returns the vertices available from the current vertex
@@ -39,4 +42,41 @@ scc ins outs vs =
     where
         topSortedVs = snd $ dfs outs (Set.empty, []) vs
         topSortedSccs = spanDfs ins (Set.empty, []) topSortedVs
+
+
+analyse :: CoreProgram -> CoreProgram
+analyse scs = [(name, args, analyseExpr expr) | (name, args, expr) <- freeVars scs]
+
+
+analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
+analyseExpr (free, ANum n) = ENum n
+analyseExpr (free, AVar v) = EVar v
+analyseExpr (free, AConstr t a) = EConstr t a
+analyseExpr (free, AAp e1 e2) = EAp (analyseExpr e1) (analyseExpr e2)
+analyseExpr (free, ACase expr alts) = ECase (analyseExpr expr) [(tag, args, analyseExpr body) | (tag, args, body) <- alts]
+analyseExpr (free, ALam args expr) = ELam args $ analyseExpr expr
+analyseExpr (free, ALet isRec defns expr) =
+    foldr splitLet expr' binderComponents
+    where
+        binders = bindersOf defns
+        binderSet | isRec = Set.fromList binders
+                  | otherwise = Set.empty
+        rhss = rhssOf defns
+        expr' = analyseExpr expr
+
+        es = foldl getEdges [] defns
+
+        ins v = [a | (a, b) <- es, v == b]
+        outs v = [a | (a, b) <- es, v == a]
+
+        getEdges edges (name, (rhsFree, rhs)) =
+            edges ++ [(name, v) | v <- (Set.toList $ Set.intersection binderSet rhsFree)]
+
+        binderComponents = scc ins outs binders
+
+        splitLet binderSet letExpr =
+            ELet isRec localDefns letExpr
+            where
+                binders = Set.toList binderSet
+                localDefns = [(name, analyseExpr $ aLookup defns name $ error "impossible") | name <- binders]
 
