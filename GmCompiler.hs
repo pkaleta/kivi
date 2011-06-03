@@ -9,26 +9,26 @@ import Core
 import Debug.Trace
 
 
-type GmCompiledSc = (Name, Int, GmCode)
+type GmCompiledSc = (Name, Int, [(Pattern Name, GmCode)])
 type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
 
-primitives :: [(Name, [Name], CoreExpr)]
-primitives = [("+", ["x", "y"], EAp (EAp (EVar "+") (EVar "x")) (EVar "y")),
-              ("-", ["x", "y"], EAp (EAp (EVar "-") (EVar "x")) (EVar "y")),
-              ("*", ["x", "y"], EAp (EAp (EVar "*") (EVar "x")) (EVar "y")),
-              ("/", ["x", "y"], EAp (EAp (EVar "/") (EVar "x")) (EVar "y")),
-              ("negate", ["x"], EAp (EVar "negate") (EVar "x")),
-              ("==", ["x", "y"], EAp (EAp (EVar "==") (EVar "x")) (EVar "y")),
-              ("!=", ["x", "y"], EAp (EAp (EVar "!=") (EVar "x")) (EVar "y")),
-              ("<", ["x", "y"], EAp (EAp (EVar "<") (EVar "x")) (EVar "y")),
-              ("<=", ["x", "y"], EAp (EAp (EVar "<=") (EVar "x")) (EVar "y")),
-              (">", ["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")),
-              (">=", ["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")),
-              ("if", ["c", "t", "f"], EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")),
-              ("True", [], EConstr 2 0),
-              ("False", [], EConstr 1 0)]
+primitives :: CoreProgram
+primitives = [("+", [(["x", "y"], EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))]),
+              ("-", [(["x", "y"], EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))]),
+              ("*", [(["x", "y"], EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))]),
+              ("/", [(["x", "y"], EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))]),
+              ("negate", [(["x"], EAp (EVar "negate") (EVar "x"))]),
+              ("==", [(["x", "y"], EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))]),
+              ("!=", [(["x", "y"], EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))]),
+              ("<", [(["x", "y"], EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))]),
+              ("<=", [(["x", "y"], EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))]),
+              (">", [(["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))]),
+              (">=", [(["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))]),
+              ("if", [(["c", "t", "f"], EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y"))]),
+              ("True", [([], EConstr 2 0)]),
+              ("False", [([], EConstr 1 0)])]
 
 
 builtinDyadicBool :: Assoc Name Instruction
@@ -69,18 +69,16 @@ buildInitialHeap program =
 
 
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
-allocateSc heap (name, argc, code) = (heap', (name, addr))
+allocateSc heap (name, argc, defns) = (heap', (name, addr))
     where
-        case hLookup heap name of
-            
-        (heap', addr) = hAlloc heap $ NGlobal argc code
+        (heap', addr) = hAlloc heap $ NGlobal argc defns
 
 
-compileSc :: (Name, [Name], CoreExpr) -> GmCompiledSc
-compileSc (name, args, expr) =
-    (name, n, compileR n expr $ zip args [0..])
+compileSc :: ScDefn Name -> GmCompiledSc
+compileSc (name, defns) = (name, n, defns')
     where
-        n = length args
+        defns' = [(pattern, compileR n expr $ zip pattern [0..]) | (pattern, expr) <- defns]
+        n = length $ fst $ head defns
 
 
 compileR :: Int -> GmCompiler

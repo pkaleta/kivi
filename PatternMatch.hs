@@ -7,12 +7,12 @@ import Data.Map as Map
 
 
 mergePatterns :: CoreProgram -> CoreProgram
-mergePatterns program = foldl mergePattern Map.empty program
+mergePatterns program = Map.toList $ foldl mergePattern Map.empty program
 
-mergePattern :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
-mergePattern defns (name, pattern, expr) =
-    Map.alter (update (PatternFunDef pattern expr)) name defns
+mergePattern :: Map Name ([PatternFunDef Name]) -> CoreScDefn -> Map Name ([PatternFunDef Name])
+mergePattern scAcc (name, defns) = -- it would always contain only one definition
+    Map.alter update name scAcc
     where
-        update value Nothing = value
-        update value (Just list) = list ++ [value]
+        update Nothing = Just defns
+        update (Just oldDefns) = Just (oldDefns ++ defns)
 

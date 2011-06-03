@@ -12,6 +12,7 @@ import LambdaLifter
 import Text.Regex.Posix
 import Data.List.Utils
 import DependencyAnalyser
+import PatternMatch
 --import Gc
 
 

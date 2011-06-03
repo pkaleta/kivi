@@ -16,6 +16,7 @@ data Expr a
     | ELam [a] (Expr a)                     -- lambda abstractions
     deriving (Show)
 
+type CorePatternFunDef = (Pattern Name, Expr Name)
 type PatternFunDef a = (Pattern a, Expr a)
 type CoreExpr = Expr Name
 type IsRec = Bool
@@ -94,7 +95,7 @@ type Pattern a = [a]
 
 data Node = NNum Int            -- numbers
           | NAp Addr Addr       -- applications
-          | NGlobal [(Pattern Name, Int, GmCode)]  -- global names (functions, numbers, variables, etc.)
+          | NGlobal Int [(Pattern Name, GmCode)]  -- global names (functions, numbers, variables, etc.)
           | NInd Addr           -- indirection nodes (updating the root of redex)
           | NConstr Int [Addr]  -- constructor nodes
     deriving Show
@@ -102,7 +103,7 @@ instance Eq Node
     where
         NNum a == NNum b = a == b
         NAp a b == NAp c d = a == b && c == d
-        NGlobal a == NGlobal b = False
+        NGlobal a b == NGlobal c d = False
         NInd a == NInd b = a == b
         NConstr a b == NConstr c d = False
 
