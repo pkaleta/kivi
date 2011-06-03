@@ -128,7 +128,7 @@ newState (NGlobal argc defns) state =
             -- as updating the code to that of the chosen pattern
             putCode code $ putStack stack state
             where
-                code = chooseMatchingCode (take argc stack) defns
+                code = chooseMatchingCode heap (take argc stack') defns
                 stack' = rearrange argc heap stack
     where
         stack = getStack state
@@ -139,9 +139,22 @@ newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
         stack' = addr : (tail $ getStack state)
 
 
-chooseMatchingCode :: [Addr] -> [(Pattern Name, GmCode)] -> GmCode
-chooseMatchingCode args [] = error "No matching code could be found"
-chooseMatchingCode args ((pattern, code) : defns) = code
+chooseMatchingCode :: GmHeap -> [Addr] -> [(Pattern Name, GmCode)] -> GmCode
+chooseMatchingCode heap args [] = error "No matching code could be found"
+chooseMatchingCode heap args ((pattern, code) : defns) | patternMatch heap args pattern = code
+                                                       | otherwise = chooseMatchingCode heap args defns
+
+patternMatch :: GmHeap -> [Addr] -> Pattern Name -> Bool
+patternMatch heap as pattern =
+    foldl check True $ zip as pattern
+    where
+        check res (addr, patElem) =
+            case isVarName patElem of
+                False -> res && (v1 == v2)
+                    where
+                        (NNum v1) = trace ("##############" ++ show addr) hLookup heap addr
+                        v2 = read patElem::Int
+                True -> res
 
 
 isVarName :: String -> Bool

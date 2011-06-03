@@ -4,6 +4,7 @@ module PatternMatch where
 import Common
 import Utils
 import Data.Map as Map
+import Debug.Trace
 
 
 mergePatterns :: CoreProgram -> CoreProgram
