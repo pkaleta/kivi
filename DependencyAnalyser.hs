@@ -45,7 +45,12 @@ scc ins outs vs = topSortedSccs
 
 
 analyseDeps :: CoreProgram -> CoreProgram
-analyseDeps scs = [(name, args, analyseExpr expr) | (name, args, expr) <- freeVars scs]
+analyseDeps scs = Prelude.map analyseDepsSc $ freeVars scs
+
+
+analyseDepsSc :: (Name, [AnnPatternFunDef Name (Set Name)]) -> CoreScDefn
+analyseDepsSc (name, defns) = (name, defns')
+    where defns' = [(pattern, analyseExpr expr) | (pattern, expr) <- defns]
 
 
 analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
