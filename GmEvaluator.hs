@@ -30,7 +30,7 @@ runD :: [Char] -> [Char]
 runD = show . analyseDeps . parse
 
 runTest :: [Char] -> [Char]
-runTest = show . mergePatterns . parse
+runTest = show . lambdaLift . lazyLambdaLift . analyseDeps . mergePatterns . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
@@ -126,7 +126,7 @@ newState (NGlobal argc defns) state =
         False ->
             -- here we are choosing the pattern that matches arguments, as well
             -- as updating the code to that of the chosen pattern
-            putCode code $ putStack stack state
+            putCode code $ putStack stack' state
             where
                 code = chooseMatchingCode heap (take argc stack') defns
                 stack' = rearrange argc heap stack
@@ -146,19 +146,15 @@ chooseMatchingCode heap args ((pattern, code) : defns) | patternMatch heap args 
 
 patternMatch :: GmHeap -> [Addr] -> Pattern Name -> Bool
 patternMatch heap as pattern =
-    foldl check True $ zip as pattern
+    trace ("##############" ++ show as ++ ", " ++ show pattern ++ ", " ++ show (foldl check True $ zip as pattern)) foldl check True $ zip as pattern
     where
         check res (addr, patElem) =
             case isVarName patElem of
                 False -> res && (v1 == v2)
                     where
-                        (NNum v1) = trace ("##############" ++ show addr) hLookup heap addr
+                        (NNum v1) = hLookup heap addr
                         v2 = read patElem::Int
                 True -> res
-
-
-isVarName :: String -> Bool
-isVarName = isAlpha . head
 
 
 unwindDump state =
@@ -378,7 +374,7 @@ get :: GmState -> GmState
 get state = putStack as $ putVStack vstack' state
     where
         (a : as) = getStack state
-        vstack' = case hLookup (getHeap state) a of
+        vstack' = case trace ("***************" ++ show (hLookup (getHeap state) a)) hLookup (getHeap state) a of
             (NNum n) ->
                 n : vstack
             (NConstr t []) ->

@@ -1,6 +1,9 @@
 module Utils where
 
+
 import Debug.Trace
+import Data.Char
+
 
 type Addr = Int
 type Assoc a b = [(a, b)]
@@ -66,4 +69,8 @@ bindersOf defns = [name | (name, _) <- defns]
 
 rhssOf :: [(a, b)] -> [b]
 rhssOf defns = [rhs | (_, rhs) <- defns]
+
+
+isVarName :: String -> Bool
+isVarName = isAlpha . head
 
