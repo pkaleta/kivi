@@ -5,6 +5,7 @@ import Parser
 import Utils
 import List
 --import Core
+import Data.Char
 import Common
 import Debug.Trace
 import GmCompiler
@@ -114,7 +115,7 @@ newState :: Node -> GmState -> GmState
 newState (NNum n) state = unwindDump state
 newState (NConstr t as) state = unwindDump state
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
-newState (NGlobal argc code) state =
+newState (NGlobal argc defns) state =
     case argc > length stack - 1 of -- if the number of arguments on the stack is not sufficient for this supercombinator
         True ->
             case dump of
@@ -123,7 +124,12 @@ newState (NGlobal argc code) state =
                 ((is, as, vs) : dump') ->
                     putCode is $ putStack (last stack : as) $ putVStack vs state
         False ->
-            putCode code $ putStack (rearrange argc heap stack) state
+            -- here we are choosing the pattern that matches arguments, as well
+            -- as updating the code to that of the chosen pattern
+            putCode code $ putStack stack state
+            where
+                code = chooseMatchingCode (take argc stack) defns
+                stack' = rearrange argc heap stack
     where
         stack = getStack state
         heap = getHeap state
@@ -131,6 +137,16 @@ newState (NGlobal argc code) state =
 newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
     where
         stack' = addr : (tail $ getStack state)
+
+
+chooseMatchingCode :: [Addr] -> [(Pattern Name, GmCode)] -> GmCode
+chooseMatchingCode args [] = error "No matching code could be found"
+chooseMatchingCode args ((pattern, code) : defns) = code
+
+
+isVarName :: String -> Bool
+isVarName = isAlpha . head
+
 
 unwindDump state =
     putCode code $ putStack (addr : stack) $ putVStack vstack $ putDump ds state
@@ -154,7 +170,8 @@ pushglobalPack name state =
         False ->
             putStack (addr : stack) $ putHeap heap' state
             where
-                (heap', addr) = hAlloc heap $ NGlobal n [Pack t n, Update 0, Unwind]
+                varNames = map (\c -> [c]) ['a'..'z']
+                (heap', addr) = hAlloc heap $ NGlobal n [(take n varNames, [Pack t n, Update 0, Unwind])]
                 [t, n] = map read $ split "," (name =~ "[0-9]+,[0-9]+" :: String)
     where
         globals = getGlobals state
