@@ -128,9 +128,12 @@ pProgram :: Parser CoreProgram
 pProgram = pOneOrMoreWithSep pSc (pLit ";")
 
 pSc :: Parser CoreScDefn
-pSc = pThen4 mkSc pVar (pZeroOrMore pVar) (pLit "=") pExpr
+pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc var vars equals expr = (var, vars, expr)
+        mkSc var pattern equals expr = (var, pattern, expr)
+
+--pPattern :: Parser Core
+pPattern = pZeroOrMore (pVar `pOr` (pNum `pApply` show))
 
 pExpr :: Parser CoreExpr
 pExpr =

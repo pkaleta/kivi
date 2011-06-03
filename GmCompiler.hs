@@ -71,6 +71,8 @@ buildInitialHeap program =
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
 allocateSc heap (name, argc, code) = (heap', (name, addr))
     where
+        case hLookup heap name of
+            
         (heap', addr) = hAlloc heap $ NGlobal argc code
 
 

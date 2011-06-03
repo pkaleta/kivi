@@ -4,10 +4,10 @@ module LambdaLifter where
 import Utils
 import Common
 import Data.Set (Set)
-import qualified Data.Set as Set
 import NameSupply
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import List
 import Debug.Trace
 
@@ -23,9 +23,10 @@ data AnnExpr' a b = AVar Name
                   | ALam [a] (AnnExpr a b)
     deriving Show
 
+type AnnPatternFunDef a b = (Pattern a, AnnExpr a b)
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, [a], AnnExpr a b)
-type AnnProgram a b = [(Name, [a], AnnExpr a b)]
+type AnnProgram a b = [(Name, [AnnPatternFunDef a b])]
 type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
 type Level = Int
 
@@ -36,7 +37,9 @@ lambdaLift = collectScs . rename . abstract . freeVars
 
 freeVars :: CoreProgram -> AnnProgram Name (Set Name)
 freeVars [] = []
-freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (Set.fromList args) expr) : (freeVars scs)
+freeVars ((name, defns) : rest) = (name, defns') : (freeVars rest)
+    where
+        defns' = [(pattern, calcFreeVars (Set.fromList pattern) expr) | (pattern, expr) <- defns]
 
 
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
@@ -82,7 +85,10 @@ calcFreeVars localVars (EConstr t n) =
 
 
 abstract :: AnnProgram Name (Set Name) -> CoreProgram
-abstract program = [(name, args, abstractExpr expr) | (name, args, expr) <- program]
+abstract [] = []
+abstract ((name, defns) : rest) = (name, defns') : (abstract rest)
+    where
+        defns' = [(pattern, abstractExpr expr) | (pattern, expr) <- defns]
 
 
 abstractExpr :: AnnExpr Name (Set Name) -> CoreExpr
@@ -127,11 +133,16 @@ renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
          -> NameSupply
          -> ScDefn a
          -> (NameSupply, ScDefn a)
-renameSc newNamesFun ns (name, args, expr) =
-    (ns2, (name, args', expr'))
+renameSc newNamesFun ns (name, defns) =
+    (ns', (name, defns'))
     where
-        (ns1, args', mapping) = newNamesFun ns args
-        (ns2, expr') = renameExpr newNamesFun mapping ns1 expr
+        (ns', defns') = mapAccumL renameDefns ns defns
+
+        renameDefns ns (pattern, expr) =
+            (ns2, (pattern', expr'))
+            where
+                (ns1, pattern', mapping) = newNamesFun ns pattern
+                (ns2, expr') = renameExpr newNamesFun mapping ns1 expr
 
 
 renameExpr :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name)) -- function used to create new names for variables
@@ -187,14 +198,32 @@ collectScs scs = foldl collectSc [] scs
 
 
 collectSc :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
-collectSc scsAcc (name, args, expr) =
-    [(name, args', expr')] ++ scsAcc ++ scs
+collectSc scsAcc (name, defns) =
+    [(name, defns')] ++ scsAcc ++ scs
     where
-        (args', (scs, expr')) = case expr of
-                                    (ELet isRec [(scName, (ELam lamArgs lamExpr))] letBody) ->
-                                        (lamArgs, collectExpr lamExpr)
-                                    expr ->
-                                        (args, collectExpr expr)
+        (scs, defns') = mapAccumL collectScDefn [] defns
+
+        -- eliminating let(rec) bindings in case they define only one lambda abstraction
+        collectScDefn scsAcc (pattern, expr) =
+            (scs ++ scsAcc, (pattern', expr'))
+            where
+                (pattern', (scs, expr')) = case expr of
+                    (ELet isRec [(scName, (ELam lamPattern lamExpr))] letBody) ->
+                        (lamPattern, collectExpr lamExpr)
+                    expr ->
+                        (pattern, collectExpr expr)
+
+
+--collectScDefn scsAcc (name, args, expr) =
+--    [(name, args', expr')] ++ scsAcc ++ scs
+--    where
+--        -- eliminating let(rec) bindings in case they define only one lambda
+--        -- abstraction
+--        (args', (scs, expr')) = case expr of
+--                                    (ELet isRec [(scName, (ELam lamArgs lamExpr))] letBody) ->
+--                                        (lamArgs, collectExpr lamExpr)
+--                                    expr ->
+--                                        (args, collectExpr expr)
 
 
 collectExpr :: CoreExpr -> ([CoreScDefn], CoreExpr)
@@ -213,7 +242,7 @@ collectExpr (ELet isRec defns expr) =
         (defnsScs, defns') = foldl collectDef ([], []) defns
         (scDefns, varDefns) = partition isSc defns'
         -- supercombinators declared locally in defns as lambda expressions
-        localScs = [(name, args, expr) | (name, ELam args expr) <- scDefns]
+        localScs = [(name, [(pattern, expr)]) | (name, ELam pattern expr) <- scDefns]
         (exprScs, expr') = collectExpr expr
 
         -- is supercombinator predicate
@@ -223,8 +252,8 @@ collectExpr (ELet isRec defns expr) =
         -- helper to extract supercombinators nested in definitions
         collectDef (scsAcc, defnsAcc) (name, expr) =
             case collectExpr expr of
-                ([(scName1, scArgs, scExpr)], (EVar scName2)) | scName1 == scName2 ->
-                    (scsAcc ++ [(name, scArgs, scExpr)], defnsAcc)
+                ([(scName1, defns)], (EVar scName2)) | scName1 == scName2 ->
+                    (scsAcc ++ [(name, defns)], defnsAcc)
                 (scs, expr') ->
                     (scsAcc ++ scs, (name, expr') : defnsAcc)
 
@@ -251,13 +280,17 @@ freeVarsOf (fvs, _) = fvs
 
 ------------------ lazy lambda lifter
 
+
 lazyLambdaLift :: CoreProgram -> CoreProgram
 lazyLambdaLift = float . mergeLambdas . renameL . identifyMFEs . annotateLevels . separateLambdas
 
 
 separateLambdas :: CoreProgram -> CoreProgram
 separateLambdas [] = []
-separateLambdas ((name, args, expr) : scs) = (name, [], mkSepArgs args $ separateLambdasExpr expr) : separateLambdas scs
+separateLambdas ((name, defns) : rest) =
+    (name, defns') : separateLambdas rest
+    where
+        defns' = [([], mkSepArgs pattern $ separateLambdasExpr expr) | (pattern, expr) <- defns]
 
 
 separateLambdasExpr :: CoreExpr -> CoreExpr
@@ -273,9 +306,9 @@ separateLambdasExpr (ELam args body) =
     mkSepArgs args body'
     where body' = separateLambdasExpr body
 separateLambdasExpr (ELet isRec defns body) =
-    ELet isRec (map mkDefn defns) (separateLambdasExpr body)
+    ELet isRec defns' (separateLambdasExpr body)
     where
-        mkDefn (name, expr) = (name, separateLambdasExpr expr)
+        defns' = [(name, separateLambdasExpr expr) | (name, expr) <- defns]
 
 
 mkSepArgs :: [Name] -> CoreExpr -> CoreExpr
@@ -290,7 +323,10 @@ annotateLevels = freeToLevel . freeVars
 
 freeToLevel :: AnnProgram Name (Set Name) -> AnnProgram (Name, Level) Level
 freeToLevel [] = []
-freeToLevel ((name, [], expr) : scs) = (name, [], freeToLevelExpr 0 Map.empty expr) : freeToLevel scs
+freeToLevel ((name, defns) : scs) =
+    (name, defns') : freeToLevel scs
+    where
+        defns' = [([], freeToLevelExpr 0 Map.empty expr) | ([], expr) <- defns]
 
 
 freeToLevelExpr :: Level -> Map Name Level -> AnnExpr Name (Set Name) -> AnnExpr (Name, Level) Level
@@ -358,7 +394,11 @@ freeSetToLevel env free =
 
 
 identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
-identifyMFEs scs = [(name, [], identifyMFEsExpr 0 expr) | (name, [], expr) <- scs]
+identifyMFEs [] = []
+identifyMFEs ((name, defns) : scs) =
+    (name, defns') : identifyMFEs scs
+    where
+        defns' = [([], identifyMFEsExpr 0 expr) | ([], expr) <- defns]
 
 
 identifyMFEsExpr :: Level -> AnnExpr (Name, Level) Level -> Expr (Name, Level)
@@ -412,7 +452,11 @@ newNamesL ns names =
 
 
 mergeLambdas :: Program (Name, Level) -> Program (Name, Level)
-mergeLambdas scs = [(name, args, mergeLambdasExpr expr) | (name, args, expr) <- scs]
+mergeLambdas [] = []
+mergeLambdas ((name, defns) : scs) =
+    (name, defns') : mergeLambdas scs
+    where
+        defns' = [(pattern, mergeLambdasExpr expr) | (pattern, expr) <- defns]
 
 
 mergeLambdasExpr :: Expr (Name, Level) -> Expr (Name, Level)
@@ -432,8 +476,14 @@ float = foldl collectFloatedSc []
 
 
 collectFloatedSc :: [CoreScDefn] -> ScDefn (Name, Level) -> [CoreScDefn]
-collectFloatedSc scsAcc (name, [], expr) =
-    scsAcc ++ [(name, [], expr')] ++ floatedScs
+collectFloatedSc scsAcc (name, defns) = scsAcc ++ [(name, defns')] ++ scs
+    where
+        (scs, defns') = mapAccumL collectFloatedScDefn [] defns
+
+
+collectFloatedScDefn :: [CoreScDefn] -> PatternFunDef (Name, Level) -> ([CoreScDefn], PatternFunDef Name)
+collectFloatedScDefn scsAcc ([], expr) =
+    (scsAcc ++ floatedScs, ([], expr'))
     where
         (fds, expr') = floatExpr expr
         floatedScs = foldl createScs [] fds
@@ -441,7 +491,7 @@ collectFloatedSc scsAcc (name, [], expr) =
         createScs scs (level, isRec, defns) =
             scs ++ map createSc defns
 
-        createSc (name, defn) = (name, [], defn)
+        createSc (name, defn) = (name, [([], defn)])
 
 
 floatExpr :: Expr (Name, Level) -> (FloatedDefns, CoreExpr)

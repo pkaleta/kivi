@@ -16,7 +16,7 @@ import DependencyAnalyser
 
 
 run :: [Char] -> [Char]
-run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyse . parse
+run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . mergePatterns . parse
 
 runS :: [Char] -> [Char]
 runS = show . lambdaLift . parse
@@ -25,7 +25,10 @@ runF :: [Char] -> [Char]
 runF = show . lambdaLift . lazyLambdaLift . parse
 
 runD :: [Char] -> [Char]
-runD = show . analyse . parse
+runD = show . analyseDeps . parse
+
+runTest :: [Char] -> [Char]
+runTest = show . mergePatterns . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
