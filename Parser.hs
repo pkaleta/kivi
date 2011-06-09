@@ -132,8 +132,8 @@ pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
         mkSc var pattern equals expr = (var, [(pattern, expr)])
 
---pPattern :: Parser Core
-pPattern = pZeroOrMore (pVar `pOr` (pNum `pApply` show))
+pPattern :: Parser CoreExpr
+pPattern = pZeroOrMore ((pVar `pApply` EVar) `pOr` (pNum `pApply` ENum) `pOr` pConstr)
 
 pExpr :: Parser CoreExpr
 pExpr =
@@ -152,12 +152,16 @@ pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
-    pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
+    pConstr `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
+    where
+        mkParenExpr _ expr _ = expr
+
+pConstr :: Parser CoreExpr
+pConstr = pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}")
     where
         mkConstr _ _ constr _ = constr
         mkTwoNumbers a _ b = EConstr a b
-        mkParenExpr _ expr _ = expr
 
 pDefns :: Parser [CoreDefn]
 pDefns = pOneOrMoreWithSep pDefn (pLit ";")

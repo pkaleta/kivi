@@ -23,11 +23,11 @@ data AnnExpr' a b = AVar Name
                   | ALam [a] (AnnExpr a b)
     deriving Show
 
-type AnnPatternFunDef a b = (Pattern a, AnnExpr a b)
+type AnnPatternFunDef a b = ([a], AnnExpr a b)
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, [a], AnnExpr a b)
 type AnnProgram a b = [(Name, [AnnPatternFunDef a b])]
-type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
+type FloatedDefns = [(Level, IsRec, [(CorePatExpr, Expr CorePatExpr)])]
 type Level = Int
 
 
@@ -35,14 +35,26 @@ lambdaLift :: CoreProgram -> CoreProgram
 lambdaLift = collectScs . rename . abstract . freeVars
 
 
-freeVars :: CoreProgram -> AnnProgram Name (Set Name)
+freeVars :: CoreProgram -> AnnProgram CorePatExpr (Set Name)
 freeVars [] = []
 freeVars ((name, defns) : rest) = (name, defns') : (freeVars rest)
     where
-        defns' = [(pattern, calcFreeVars (Set.fromList pattern) expr) | (pattern, expr) <- defns]
+        defns' = [(pattern, calcFreeVars (Set.fromList $ getVarNames pattern) expr) | (pattern, expr) <- defns]
 
 
-calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
+getVarNames :: [CorePatExpr] -> [Name]
+getVarNames pattern = foldl getVarNamesExpr [] pattern
+
+
+getVarNamesExpr :: [Name] -> CorePatExpr -> [Name]
+getVarNamesExpr names (ENum n) = names
+getVarNamesExpr names (EVar v) = v : names
+getVarNamesExpr names (EAp e1 e2) = (getVarNamesExpr names e1) ++ (getVarNamesExpr names e2) ++ names
+getVarNamesExpr names (EConstr t a) = names
+getVarNamesExpr names _ = error "Invalid pattern"
+
+
+calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr (PatExpr Name) (Set Name)
 calcFreeVars localVars (ENum n) = (Set.empty, ANum n)
 calcFreeVars localVars (EVar v) | Set.member v localVars = (Set.singleton v, AVar v)
                                 | otherwise = (Set.empty, AVar v)
@@ -50,20 +62,20 @@ calcFreeVars localVars (EAp e1 e2) = (Set.union s1 s2, AAp ae1 ae2)
     where
         ae1@(s1, _) = calcFreeVars localVars e1
         ae2@(s2, _) = calcFreeVars localVars e2
-calcFreeVars localVars (ELam args expr) = (Set.difference fvs argsSet, ALam args expr')
+calcFreeVars localVars (ELam pattern expr) = (Set.difference fvs patternSet, ALam pattern expr')
     where
-        expr'@(fvs, _) = calcFreeVars (Set.union localVars argsSet) expr
-        argsSet = Set.fromList args
+        expr'@(fvs, _) = calcFreeVars (Set.union localVars patternSet) expr
+        patternSet = Set.fromList $ getVarNames pattern
 calcFreeVars localVars (ELet isRec defns expr) =
     (Set.union bodyFvs defnsFvs, ALet isRec defns' expr')
     where
-        binders = Set.fromList $ bindersOf defns
+        binders = Set.fromList $ getVarNames $ bindersOf defns
         exprLvs = Set.union binders localVars
         rhsLvs | isRec = exprLvs
                | otherwise = localVars
         -- annotated stuff
         rhss' = map (calcFreeVars rhsLvs) $ rhssOf defns
-        defns' = zip (Set.toList binders) rhss'
+        defns' = zip (bindersOf defns) rhss'
         expr' = calcFreeVars exprLvs expr
         rhssFvs = foldl Set.union Set.empty (map freeVarsOf rhss')
         defnsFvs | isRec = Set.difference rhssFvs binders
@@ -75,34 +87,34 @@ calcFreeVars localVars (ECase expr alts) =
         expr'@(exprFvs, _) = calcFreeVars localVars expr
         (fvs, alts') = mapAccumL freeVarsAlts exprFvs alts
 
-        freeVarsAlts fvs (t, vars, body) =
-            (Set.union fvs (Set.difference bodyFvs varsSet), (t, vars, body'))
+        freeVarsAlts fvs (t, pattern, body) =
+            (Set.union fvs (Set.difference bodyFvs varsSet), (t, pattern, body'))
             where
                 body'@(bodyFvs, _) = calcFreeVars (Set.union varsSet localVars) body
-                varsSet = Set.fromList vars
+                varsSet = Set.fromList $ getVarNames pattern
 calcFreeVars localVars (EConstr t n) =
     (Set.empty, AConstr t n)
 
 
-abstract :: AnnProgram Name (Set Name) -> CoreProgram
+abstract :: AnnProgram (PatExpr Name) (Set Name) -> CoreProgram
 abstract [] = []
 abstract ((name, defns) : rest) = (name, defns') : (abstract rest)
     where
         defns' = [(pattern, abstractExpr expr) | (pattern, expr) <- defns]
 
 
-abstractExpr :: AnnExpr Name (Set Name) -> CoreExpr
+abstractExpr :: AnnExpr (PatExpr Name) (Set Name) -> CoreExpr
 abstractExpr (freeVars, ANum n) = ENum n
 abstractExpr (freeVars, AVar v) = EVar v
 abstractExpr (freeVars, AAp e1 e2) = EAp (abstractExpr e1) (abstractExpr e2)
 abstractExpr (freeVars, ALet isRec defns expr) =
     ELet isRec [(name, abstractExpr body) | (name, body) <- defns] (abstractExpr expr)
-abstractExpr (freeVars, ALam args expr) =
-    foldl EAp sc $ map EVar freeVarsList
+abstractExpr (freeVars, ALam pattern expr) =
+    foldl EAp sc freeVarsList
     where
-        freeVarsList = Set.toList freeVars
-        sc = ELet False [("sc", scBody)] (EVar "sc")
-        scBody = ELam (freeVarsList ++ args) (abstractExpr expr)
+        freeVarsList = map EVar $ Set.toList freeVars
+        sc = ELet False [(EVar "sc", scBody)] (EVar "sc")
+        scBody = ELam (freeVarsList ++ pattern) (abstractExpr expr)
 abstractExpr (freeVars, ACase expr alts) =
     ECase (abstractExpr expr) alts'
     where
@@ -111,22 +123,37 @@ abstractExpr (freeVars, ACase expr alts) =
 abstractExpr (freeVars, AConstr t a) = EConstr t a
 
 
-renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
-          -> Program a
-          -> Program a
-renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
-
-
 rename :: CoreProgram -> CoreProgram
 rename = renameGen newNames
 
 
-newNames :: NameSupply -> [Name] -> (NameSupply, [Name], Map Name Name)
-newNames ns names =
-    (ns', names', mapping)
+newNames :: NameSupply -> [CorePatExpr] -> (NameSupply, [CorePatExpr], Map Name Name)
+newNames ns pattern = (ns, pattern', mapping)
+    where ((ns, mapping), pattern') = mapAccumL newNamesExpr (ns, Map.empty) pattern
+
+
+newNamesExpr :: (NameSupply, Map Name Name) -> CorePatExpr -> ((NameSupply, Map Name Name), CorePatExpr)
+newNamesExpr (ns, mapping) (ENum n) = ((ns, mapping), (ENum n))
+newNamesExpr (ns, mapping) (EVar v) = ((ns', mapping'), (EVar v'))
     where
-        (ns', names') = getNames ns names
-        mapping = Map.fromList $ zip names names'
+        (ns', v') = getName ns v
+        mapping' = Map.insert v v' mapping
+
+
+newNamesExpr (ns, mapping) (EAp e1 e2) =
+    ((ns2, mapping2), EAp e1' e2')
+    where
+        ((ns1, mapping1), e1') = newNamesExpr (ns, mapping) e1
+        ((ns2, mapping2), e2') = newNamesExpr (ns1, mapping1) e2
+newNamesExpr (ns, mapping) (EConstr t a) = ((ns, mapping), EConstr t a)
+
+
+-- generic renaming function
+
+renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+          -> Program a
+          -> Program a
+renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
 
 
 renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
@@ -136,9 +163,13 @@ renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
 renameSc newNamesFun ns (name, defns) =
     (ns', (name, defns'))
     where
-        (ns', defns') = mapAccumL renameDefns ns defns
+        (ns', defns') = mapAccumL renameDefn ns defns
 
-        renameDefns ns (pattern, expr) =
+--renameDefn :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+--            -> NameSupply
+--            -> ([a], Expr Name)
+--            -> (NameSupply, ([a], Expr Name))
+        renameDefn ns (pattern, expr) =
             (ns2, (pattern', expr'))
             where
                 (ns1, pattern', mapping) = newNamesFun ns pattern
@@ -214,18 +245,6 @@ collectSc scsAcc (name, defns) =
                         (pattern, collectExpr expr)
 
 
---collectScDefn scsAcc (name, args, expr) =
---    [(name, args', expr')] ++ scsAcc ++ scs
---    where
---        -- eliminating let(rec) bindings in case they define only one lambda
---        -- abstraction
---        (args', (scs, expr')) = case expr of
---                                    (ELet isRec [(scName, (ELam lamArgs lamExpr))] letBody) ->
---                                        (lamArgs, collectExpr lamExpr)
---                                    expr ->
---                                        (args, collectExpr expr)
-
-
 collectExpr :: CoreExpr -> ([CoreScDefn], CoreExpr)
 collectExpr (ENum n) = ([], ENum n)
 collectExpr (EVar v) = ([], EVar v)
@@ -241,27 +260,31 @@ collectExpr (ELet isRec defns expr) =
     where
         (defnsScs, defns') = foldl collectDef ([], []) defns
         (scDefns, varDefns) = partition isSc defns'
-        -- supercombinators declared locally in defns as lambda expressions
-        localScs = [(name, [(pattern, expr)]) | (name, ELam pattern expr) <- scDefns]
+        -- supercombinators declared locally in defns as lambda abstractions
+        localScs = [(name, [(pattern, expr)]) | (EVar name, ELam pattern expr) <- scDefns]
         (exprScs, expr') = collectExpr expr
 
         -- is supercombinator predicate
-        isSc (name, (ELam _ _)) = True
-        isSc (name, _) = False
+        isSc (pattern, (ELam _ _)) = True
+        isSc (pattern, _) = False
 
         -- helper to extract supercombinators nested in definitions
-        collectDef (scsAcc, defnsAcc) (name, expr) =
+        collectDef (scsAcc, defnsAcc) (patExpr, expr) =
             case collectExpr expr of
                 ([(scName1, defns)], (EVar scName2)) | scName1 == scName2 ->
-                    (scsAcc ++ [(name, defns)], defnsAcc)
+                    (scsAcc ++ [(scName1, defns)], defnsAcc)
                 (scs, expr') ->
-                    (scsAcc ++ scs, (name, expr') : defnsAcc)
+                    (scsAcc ++ scs, (patExpr, expr') : defnsAcc)
 
         --getting rid of let expressions with empty definitions part
         mkELet isRec varDefns expr =
             case length varDefns > 0 of
                 True -> ELet isRec varDefns expr
                 False -> expr
+
+
+
+
 collectExpr (ECase expr alts) =
     (exprScs ++ altsScs, ECase expr' alts')
     where
@@ -274,7 +297,7 @@ collectExpr (ECase expr alts) =
 collectExpr (EConstr t a) = ([], EConstr t a)
 
 
-freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
+freeVarsOf :: AnnExpr (PatExpr Name) (Set Name) -> Set Name
 freeVarsOf (fvs, _) = fvs
 
 
@@ -311,17 +334,17 @@ separateLambdasExpr (ELet isRec defns body) =
         defns' = [(name, separateLambdasExpr expr) | (name, expr) <- defns]
 
 
-mkSepArgs :: [Name] -> CoreExpr -> CoreExpr
+mkSepArgs :: [CorePatExpr] -> CoreExpr -> CoreExpr
 mkSepArgs args expr = foldr mkELam expr args
     where
         mkELam arg expr = ELam [arg] expr
 
 
-annotateLevels :: CoreProgram -> AnnProgram (Name, Level) Level
+annotateLevels :: CoreProgram -> AnnProgram (CorePatExpr, Level) Level
 annotateLevels = freeToLevel . freeVars
 
 
-freeToLevel :: AnnProgram Name (Set Name) -> AnnProgram (Name, Level) Level
+freeToLevel :: AnnProgram CorePatExpr (Set Name) -> AnnProgram (CorePatExpr, Level) Level
 freeToLevel [] = []
 freeToLevel ((name, defns) : scs) =
     (name, defns') : freeToLevel scs
@@ -329,7 +352,7 @@ freeToLevel ((name, defns) : scs) =
         defns' = [([], freeToLevelExpr 0 Map.empty expr) | ([], expr) <- defns]
 
 
-freeToLevelExpr :: Level -> Map Name Level -> AnnExpr Name (Set Name) -> AnnExpr (Name, Level) Level
+freeToLevelExpr :: Level -> Map Name Level -> AnnExpr CorePatExpr (Set Name) -> AnnExpr (CorePatExpr, Level) Level
 freeToLevelExpr level env (free, ANum n) = (0, ANum n)
 freeToLevelExpr level env (free, AVar v) = (varLevel, AVar v)
     where
@@ -341,11 +364,12 @@ freeToLevelExpr level env (free, AAp e1 e2) = (max e1Level e2Level, AAp e1' e2')
     where
         e1'@(e1Level, _) = freeToLevelExpr level env e1
         e2'@(e2Level, _) = freeToLevelExpr level env e2
-freeToLevelExpr level env (free, ALam args expr) =
-    (freeSetToLevel env free, ALam args' expr')
+freeToLevelExpr level env (free, ALam pattern expr) =
+    (freeSetToLevel env free, ALam pattern' expr')
     where
-        expr' = freeToLevelExpr level' (Map.union (Map.fromList args') env) expr
-        args' = [(arg, level') | arg <- args]
+        expr' = freeToLevelExpr level' (Map.union localEnv env) expr
+        localEnv = Map.fromList [(v, level') | v <- getVarNames pattern]
+        pattern' = [(patExpr, level') | patExpr <- pattern]
         level' = level + 1
 freeToLevelExpr level env (free, ALet isRec defns expr) =
     (exprLevel, ALet isRec defns' expr')
@@ -361,39 +385,45 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
         rhssFreeVars = foldl collectFreeVars Set.empty rhss
         maxRhsLevel = freeSetToLevel rhssLevelEnv rhssFreeVars
 
-        exprEnv = Map.union (Map.fromList binders') env
+        binderNames = [(name, maxRhsLevel) | name <- getVarNames binders]
+        exprEnv = Map.union (Map.fromList binderNames) env
 
         rhssEnv | isRec = exprEnv
                 | otherwise = env
 
-        rhssLevelEnv | isRec = Map.union (Map.fromList [(name, 0) | name <- binders]) env
+        rhssLevelEnv | isRec = Map.union (Map.fromList [(name, 0) | name <- getVarNames binders]) env
                      | otherwise = env
 
         -- helper function to collect free variables from right had side
         -- expressions in definitions
         collectFreeVars freeVars (free, rhs) = Set.union freeVars free
+
+        -- collect only evars and map them to their var name
+        collectVar vars ((EVar v), level) = (v, level) : vars
+        collectVar vars _ = vars
 freeToLevelExpr level env (free, ACase expr alts) =
     (freeSetToLevel env free, ACase expr' alts')
     where
         expr'@(exprLevel, _) = freeToLevelExpr level env expr
         alts' = map mapAlt alts
 
-        mapAlt (tag, args, altExpr) =
-            (tag, args', altExpr')
+        mapAlt (tag, pattern, altExpr) =
+            (tag, pattern', altExpr')
             where
-                args' = [(arg, exprLevel) | arg <- args]
-                env' = Map.union (Map.fromList args') env
+                pattern' = [(patExpr, exprLevel) | patExpr <- pattern]
+                vars = [(name, exprLevel) | name <- getVarNames pattern]
+                env' = Map.union (Map.fromList vars) env
                 altExpr' = freeToLevelExpr level env' altExpr
 
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
 freeSetToLevel env free =
-    foldl max 0 $ [ case Map.lookup var env of
+    foldl max 0 $ [case Map.lookup var env of
         Just level -> level
         Nothing -> 0 | var <- (Set.toList free)]
 
 
-identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
+identifyMFEs :: AnnProgram (CorePatExpr, Level) Level -> Program (CorePatExpr, Level)
 identifyMFEs [] = []
 identifyMFEs ((name, defns) : scs) =
     (name, defns') : identifyMFEs scs
@@ -401,7 +431,7 @@ identifyMFEs ((name, defns) : scs) =
         defns' = [([], identifyMFEsExpr 0 expr) | ([], expr) <- defns]
 
 
-identifyMFEsExpr :: Level -> AnnExpr (Name, Level) Level -> Expr (Name, Level)
+identifyMFEsExpr :: Level -> AnnExpr (CorePatExpr, Level) Level -> Expr (CorePatExpr, Level)
 identifyMFEsExpr cxtLevel (exprLevel, expr) =
     case exprLevel == cxtLevel || notMFECandidate expr of
         True -> expr'
@@ -415,10 +445,10 @@ identifyMFEsExpr cxtLevel (exprLevel, expr) =
         notMFECandidate (AConstr t a) = True
         notMFECandidate _ = False
 
-        transformMFE level expr = ELet False [(("v", level), expr)] (EVar "v")
+        transformMFE level expr = ELet False [((EVar "v", level), expr)] (EVar "v")
 
 
-identifyMFEsExpr1 :: Level -> AnnExpr' (Name, Level) Level -> Expr (Name, Level)
+identifyMFEsExpr1 :: Level -> AnnExpr' (CorePatExpr, Level) Level -> Expr (CorePatExpr, Level)
 identifyMFEsExpr1 level (ANum n) = ENum n
 identifyMFEsExpr1 level (AVar v) = EVar v
 identifyMFEsExpr1 level (AConstr t a) = EConstr t a
@@ -436,22 +466,18 @@ identifyMFEsExpr1 level (ACase expr@(exprLevel, _) alts) =
         alts' = [(tag, args, identifyMFEsExpr level body) | (tag, args, body@(bodyLevel, _)) <- alts]
 
 
-renameL :: Program (Name, Level) -> Program (Name, Level)
+renameL :: Program (CorePatExpr, Level) -> Program (CorePatExpr, Level)
 renameL = renameGen newNamesL
 
 
-newNamesL :: NameSupply -> [(Name, Level)] -> (NameSupply, [(Name, Level)], Map Name Name)
-newNamesL ns names =
-    (ns', names2, mapping)
+newNamesL :: NameSupply -> [(CorePatExpr, Level)] -> (NameSupply, [(CorePatExpr, Level)], Map Name Name)
+newNamesL ns pattern = (ns', pattern1, mapping)
     where
-        names0 = map fst names
-        levels = map snd names
-        (ns', names1) = getNames ns names0
-        names2 = zip names1 levels
-        mapping = Map.fromList $ zip names0 names1
+        (ns', pattern0, mapping) = newNames ns $ map fst pattern
+        pattern1 = zip pattern0 $ map snd pattern
 
 
-mergeLambdas :: Program (Name, Level) -> Program (Name, Level)
+mergeLambdas :: Program (CorePatExpr, Level) -> Program (CorePatExpr, Level)
 mergeLambdas [] = []
 mergeLambdas ((name, defns) : scs) =
     (name, defns') : mergeLambdas scs
@@ -459,7 +485,7 @@ mergeLambdas ((name, defns) : scs) =
         defns' = [(pattern, mergeLambdasExpr expr) | (pattern, expr) <- defns]
 
 
-mergeLambdasExpr :: Expr (Name, Level) -> Expr (Name, Level)
+mergeLambdasExpr :: Expr (CorePatExpr, Level) -> Expr (CorePatExpr, Level)
 mergeLambdasExpr (ELam args expr) =
     case expr' of
         (ELam args' innerExpr) ->
@@ -471,17 +497,17 @@ mergeLambdasExpr (ELam args expr) =
 mergeLambdasExpr expr = expr
 
 
-float :: Program (Name, Level) -> CoreProgram
+float :: Program (CorePatExpr, Level) -> CoreProgram
 float = foldl collectFloatedSc []
 
 
-collectFloatedSc :: [CoreScDefn] -> ScDefn (Name, Level) -> [CoreScDefn]
+collectFloatedSc :: [CoreScDefn] -> ScDefn (CorePatExpr, Level) -> [CoreScDefn]
 collectFloatedSc scsAcc (name, defns) = scsAcc ++ [(name, defns')] ++ scs
     where
         (scs, defns') = mapAccumL collectFloatedScDefn [] defns
 
 
-collectFloatedScDefn :: [CoreScDefn] -> PatternFunDef (Name, Level) -> ([CoreScDefn], PatternFunDef Name)
+collectFloatedScDefn :: [CoreScDefn] -> PatternFunDef (CorePatExpr, Level) -> ([CoreScDefn], PatternFunDef CorePatExpr)
 collectFloatedScDefn scsAcc ([], expr) =
     (scsAcc ++ floatedScs, ([], expr'))
     where
@@ -491,10 +517,10 @@ collectFloatedScDefn scsAcc ([], expr) =
         createScs scs (level, isRec, defns) =
             scs ++ map createSc defns
 
-        createSc (name, defn) = (name, [([], defn)])
+        createSc (EVar name, defn) = (name, [([], defn)])
 
 
-floatExpr :: Expr (Name, Level) -> (FloatedDefns, CoreExpr)
+floatExpr :: Expr (CorePatExpr, Level) -> (FloatedDefns, CoreExpr)
 floatExpr (ENum n) = ([], ENum n)
 floatExpr (EVar v) = ([], EVar v)
 floatExpr (EConstr t a) = ([], EConstr t a)
@@ -502,11 +528,11 @@ floatExpr (EAp e1 e2) = (fds1 ++ fds2, EAp e1' e2')
     where
         (fds1, e1') = floatExpr e1
         (fds2, e2') = floatExpr e2
-floatExpr (ELam args expr) =
-    (outerFds, ELam args' $ wrap innerFds expr')
+floatExpr (ELam pattern expr) =
+    (outerFds, ELam pattern' $ wrap innerFds expr')
     where
-        args' = [arg | (arg, level) <- args]
-        (arg, curLevel) = head args
+        pattern' = [patExpr | (patExpr, level) <- pattern]
+        (patExpr, curLevel) = head pattern
         (fdBody, expr') = floatExpr expr
         (innerFds, outerFds) = partition checkLevel fdBody
 
@@ -524,17 +550,16 @@ floatExpr (ELet isRec defns expr) =
         (exprFds, expr') = floatExpr expr
         (defnsFds, defns') = mapAccumL collectDefns [] defns
         localFd = (level, isRec, defns')
-        ((name, level), _firstDefn) = head defns
+        ((patExpr, level), _firstDefn) = head defns
 
-        collectDefns defnsAcc ((name, level), rhs) =
-            (rhsFds ++ defnsAcc, (name, rhs'))
+        collectDefns defnsAcc ((patExpr, level), rhs) =
+            (rhsFds ++ defnsAcc, (patExpr, rhs'))
             where
                 (rhsFds, rhs') = floatExpr rhs
 floatExpr (ECase expr alts) =
     (exprFds ++ altsFds, ECase expr' alts')
     where
         (exprFds, expr') = floatExpr expr
-
         (altsFds, alts') = mapAccumL collectAlts [] alts
 
         collectAlts altsAcc (tag, args, altExpr) =

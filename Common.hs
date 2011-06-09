@@ -16,16 +16,19 @@ data Expr a
     | ELam [a] (Expr a)                     -- lambda abstractions
     deriving (Show)
 
-type CorePatternFunDef = (Pattern Name, Expr Name)
-type PatternFunDef a = (Pattern a, Expr a)
-type CoreExpr = Expr Name
+
+type CorePatternFunDef = PatternFunDef CorePatExpr
+type PatternFunDef a = ([a], Expr a)
+type CorePatExpr = PatExpr Name
+type PatExpr a = Expr a
+type CoreExpr = Expr CorePatExpr
 type IsRec = Bool
 type Alter a = (Int, [a], Expr a)
 type CoreAlt = Alter Name
 type Program a = [ScDefn a]
-type CoreProgram = Program Name
+type CoreProgram = Program CorePatExpr
 type ScDefn a = (Name, [PatternFunDef a])
-type CoreScDefn = ScDefn Name
+type CoreScDefn = ScDefn CorePatExpr
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
 
