@@ -31,8 +31,15 @@ type ScDefn a = (Name, [PatternFunDef a])
 type CoreScDefn = ScDefn CorePatExpr
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
-
 type Name = String
+
+
+instance Eq (Expr a)
+    where
+        EVar v1 == EVar v2 = v1 == v2
+        ENum n1 == ENum n2 = n1 == n2
+        a == b = False
+
 
 -- GmEvaluator
 type GmState = (GmOutput,

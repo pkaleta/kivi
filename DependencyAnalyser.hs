@@ -48,12 +48,12 @@ analyseDeps :: CoreProgram -> CoreProgram
 analyseDeps scs = Prelude.map analyseDepsSc $ freeVars scs
 
 
-analyseDepsSc :: (Name, [AnnPatternFunDef Name (Set Name)]) -> CoreScDefn
+analyseDepsSc :: (Name, [AnnPatternFunDef CorePatExpr (Set Name)]) -> CoreScDefn
 analyseDepsSc (name, defns) = (name, defns')
     where defns' = [(pattern, analyseExpr expr) | (pattern, expr) <- defns]
 
 
-analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
+analyseExpr :: AnnExpr CorePatExpr (Set Name) -> CoreExpr
 analyseExpr (free, ANum n) = ENum n
 analyseExpr (free, AVar v) = EVar v
 analyseExpr (free, AConstr t a) = EConstr t a
@@ -63,7 +63,7 @@ analyseExpr (free, ALam args expr) = ELam args $ analyseExpr expr
 analyseExpr (free, ALet isRec defns expr) =
     foldr splitLet expr' binderComponents
     where
-        binders = bindersOf defns
+        binders = getVarNames $ bindersOf defns
         binderSet | isRec = Set.fromList binders
                   | otherwise = Set.empty
         rhss = rhssOf defns
@@ -74,7 +74,7 @@ analyseExpr (free, ALet isRec defns expr) =
         ins v = [a | (a, b) <- es, v == b]
         outs v = [b | (a, b) <- es, v == a]
 
-        getEdges edges (name, (rhsFree, rhs)) =
+        getEdges edges (EVar name, (rhsFree, rhs)) =
             edges ++ [(name, v) | v <- (Set.toList $ Set.intersection binderSet rhsFree)]
 
         binderComponents = scc ins outs binders
@@ -83,7 +83,7 @@ analyseExpr (free, ALet isRec defns expr) =
             ELet True defns' letExpr
             where
                 binders = Set.toList binderSet
-                localDefns = [(name, aLookup defns name $ error "impossible") | name <- binders]
+                localDefns = [(EVar name, aLookup defns (EVar name) $ error "impossible") | name <- binders]
                 freeVars = foldl Set.union Set.empty $ [free | (name, (free, rhs)) <- localDefns]
                 defns' = [(name, analyseExpr rhs) | (name, rhs) <- localDefns]
                 isRec = Set.intersection freeVars binderSet /= Set.empty
