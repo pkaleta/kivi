@@ -20,6 +20,7 @@ import PatternMatch
 run :: [Char] -> [Char]
 run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . mergePatterns . parse
 
+
 runS :: [Char] -> [Char]
 runS = show . lambdaLift . parse
 
@@ -30,7 +31,7 @@ runD :: [Char] -> [Char]
 runD = show . analyseDeps . parse
 
 runTest :: [Char] -> [Char]
-runTest = show . lambdaLift . lazyLambdaLift . analyseDeps . mergePatterns . parse
+runTest = show . lambdaLift . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""

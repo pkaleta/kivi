@@ -116,8 +116,9 @@ rename = renameGen newNames
 
 
 newNames :: NameSupply -> [CorePatExpr] -> (NameSupply, [CorePatExpr], Map Name Name)
-newNames ns pattern = (ns, pattern', mapping)
-    where ((ns, mapping), pattern') = mapAccumL newNamesExpr (ns, Map.empty) pattern
+newNames ns pattern = (ns', pattern', mapping)
+    where
+        ((ns', mapping), pattern') = mapAccumL newNamesExpr (ns, Map.empty) pattern
 
 
 newNamesExpr :: (NameSupply, Map Name Name) -> CorePatExpr -> ((NameSupply, Map Name Name), CorePatExpr)
@@ -126,25 +127,23 @@ newNamesExpr (ns, mapping) (EVar v) = ((ns', mapping'), (EVar v'))
     where
         (ns', v') = getName ns v
         mapping' = Map.insert v v' mapping
-
-
-newNamesExpr (ns, mapping) (EAp e1 e2) =
-    ((ns2, mapping2), EAp e1' e2')
-    where
-        ((ns1, mapping1), e1') = newNamesExpr (ns, mapping) e1
-        ((ns2, mapping2), e2') = newNamesExpr (ns1, mapping1) e2
-newNamesExpr (ns, mapping) (EConstr t a) = ((ns, mapping), EConstr t a)
+--newNamesExpr (ns, mapping) (EAp e1 e2) =
+--    ((ns2, mapping2), EAp e1' e2')
+--    where
+--        ((ns1, mapping1), e1') = newNamesExpr (ns, mapping) e1
+--        ((ns2, mapping2), e2') = newNamesExpr (ns1, mapping1) e2
+--newNamesExpr (ns, mapping) (EConstr t a) = ((ns, mapping), EConstr t a)
 
 
 -- generic renaming function
 
-renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+renameGen :: Show a => (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
           -> Program a
           -> Program a
 renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
 
 
-renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+renameSc :: Show a => (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
          -> NameSupply
          -> ScDefn a
          -> (NameSupply, ScDefn a)
@@ -153,10 +152,6 @@ renameSc newNamesFun ns (name, defns) =
     where
         (ns', defns') = mapAccumL renameDefn ns defns
 
---renameDefn :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
---            -> NameSupply
---            -> ([a], Expr Name)
---            -> (NameSupply, ([a], Expr Name))
         renameDefn ns (pattern, expr) =
             (ns2, (pattern', expr'))
             where
