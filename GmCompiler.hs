@@ -9,24 +9,24 @@ import Core
 import Debug.Trace
 
 
-type GmCompiledSc = (Name, Int, [(Pattern Name, GmCode)])
+type GmCompiledSc = (Name, Int, [(CorePattern, GmCode)])
 type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
 
 primitives :: CoreProgram
-primitives = [("+", [(["x", "y"], EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))]),
-              ("-", [(["x", "y"], EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))]),
-              ("*", [(["x", "y"], EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))]),
-              ("/", [(["x", "y"], EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))]),
-              ("negate", [(["x"], EAp (EVar "negate") (EVar "x"))]),
-              ("==", [(["x", "y"], EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))]),
-              ("!=", [(["x", "y"], EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))]),
-              ("<", [(["x", "y"], EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))]),
-              ("<=", [(["x", "y"], EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))]),
-              (">", [(["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))]),
-              (">=", [(["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))]),
-              ("if", [(["c", "t", "f"], EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y"))]),
+primitives = [("+", [([EVar "x", EVar "y"], EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))]),
+              ("-", [([EVar "x", EVar "y"], EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))]),
+              ("*", [([EVar "x", EVar "y"], EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))]),
+              ("/", [([EVar "x", EVar "y"], EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))]),
+              ("negate", [([EVar "x"], EAp (EVar "negate") (EVar "x"))]),
+              ("==", [([EVar "x", EVar "y"], EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))]),
+              ("!=", [([EVar "x", EVar "y"], EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))]),
+              ("<", [([EVar "x", EVar "y"], EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))]),
+              ("<=", [([EVar "x", EVar "y"], EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))]),
+              (">", [([EVar "x", EVar "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))]),
+              (">=", [([EVar "x", EVar "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))]),
+              ("if", [([EVar "c", EVar "t", EVar "f"], EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y"))]),
               ("True", [([], EConstr 2 0)]),
               ("False", [([], EConstr 1 0)])]
 
@@ -74,10 +74,10 @@ allocateSc heap (name, argc, defns) = (heap', (name, addr))
         (heap', addr) = hAlloc heap $ NGlobal argc defns
 
 
-compileSc :: ScDefn Name -> GmCompiledSc
+compileSc :: ScDefn CorePatExpr -> GmCompiledSc
 compileSc (name, defns) = (name, n, defns')
     where
-        defns' = [(pattern, compileR n expr $ zip pattern [0..]) | (pattern, expr) <- defns]
+        defns' = [(pattern, compileR n expr $ zip (getVarNames pattern) [0..]) | (pattern, expr) <- defns]
         n = length $ fst $ head defns
 
 
@@ -144,11 +144,11 @@ compileD comp alts env = [compileA comp alt env | alt <- alts]
 
 
 compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Int, GmCode)
-compileA comp (t, args, expr) env =
+compileA comp (t, pattern, expr) env =
     (t, [Split n] ++ comp expr env' ++ [Slide n])
     where
-        n = length args
-        env' = zip args [0..] ++ argOffset n env
+        n = length pattern
+        env' = zip (getVarNames pattern) [0..] ++ argOffset n env
 
 
 compileC :: GmCompiler
@@ -172,26 +172,26 @@ compileC x env = error $ "Compilation scheme for the following expression does n
 constrFunctionName t n = "Pack{" ++ show t ++ "," ++ show n ++ "}"
 
 
-compileLet :: [Instruction] -> GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
+compileLet :: [Instruction] -> GmCompiler -> [CoreDefn] -> GmCompiler
 compileLet finalInstrs comp defs body env =
     compileDefs defs env ++ comp body env' ++ finalInstrs
     where
         env' = compileArgs defs env
 
 
-compileDefs :: [(Name, CoreExpr)] -> GmEnvironment -> GmCode
+compileDefs :: [CoreDefn] -> GmEnvironment -> GmCode
 compileDefs [] env = []
 compileDefs ((name, expr) : defs) env =
     compileC expr env ++ (compileDefs defs $ argOffset 1 env)
 
-compileArgs :: [(Name, CoreExpr)] -> GmEnvironment -> GmEnvironment
+compileArgs :: [CoreDefn] -> GmEnvironment -> GmEnvironment
 compileArgs defs env =
-    zip (map fst defs) [n-1, n-2 .. 0] ++ argOffset n env
+    zip (getVarNames $ map fst defs) [n-1, n-2 .. 0] ++ argOffset n env
     where
         n = length defs
 
 
-compileLetrec :: [Instruction] -> GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
+compileLetrec :: [Instruction] -> GmCompiler -> [CoreDefn] -> GmCompiler
 compileLetrec finalInstrs comp defs body env =
     [Alloc n] ++ compileRecDefs n defs env' ++ comp body env' ++ finalInstrs
     where
@@ -199,7 +199,7 @@ compileLetrec finalInstrs comp defs body env =
         env' = compileArgs defs env
 
 
-compileRecDefs :: Int -> [(Name, CoreExpr)] -> GmEnvironment -> GmCode
+compileRecDefs :: Int -> [CoreDefn] -> GmEnvironment -> GmCode
 compileRecDefs 0 [] env = []
 compileRecDefs n ((name, expr) : defs) env =
         compileC expr env ++ [Update $ n - 1] ++ compileRecDefs (n - 1) defs env

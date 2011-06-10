@@ -32,6 +32,8 @@ type CoreScDefn = ScDefn CorePatExpr
 type Defn a = (a, Expr a)
 type CoreDefn = Defn CorePatExpr
 type Name = String
+type Pattern a = [a]
+type CorePattern = Pattern CorePatExpr
 
 
 instance Eq (Expr a)
@@ -101,11 +103,9 @@ type GmDumpItem = (GmCode, GmStack, GmVStack)
 
 type GmHeap = Heap Node
 
-type Pattern a = [a]
-
 data Node = NNum Int            -- numbers
           | NAp Addr Addr       -- applications
-          | NGlobal Int [(Pattern Name, GmCode)]  -- global names (functions, numbers, variables, etc.)
+          | NGlobal Int [(CorePattern, GmCode)]  -- global names (functions, numbers, variables, etc.)
           | NInd Addr           -- indirection nodes (updating the root of redex)
           | NConstr Int [Addr]  -- constructor nodes
     deriving Show
@@ -177,4 +177,16 @@ statGetSteps s = s
 
 statIncSteps :: GmStats -> GmStats
 statIncSteps s = s+1
+
+
+getVarNames :: [CorePatExpr] -> [Name]
+getVarNames pattern = foldl getVarNamesExpr [] pattern
+
+
+getVarNamesExpr :: [Name] -> CorePatExpr -> [Name]
+getVarNamesExpr names (ENum n) = names
+getVarNamesExpr names (EVar v) = v : names
+getVarNamesExpr names (EAp e1 e2) = (getVarNamesExpr names e1) ++ (getVarNamesExpr names e2) ++ names
+getVarNamesExpr names (EConstr t a) = names
+getVarNamesExpr names _ = error "Invalid pattern"
 

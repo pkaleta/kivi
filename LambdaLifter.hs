@@ -42,18 +42,6 @@ freeVars ((name, defns) : rest) = (name, defns') : (freeVars rest)
         defns' = [(pattern, calcFreeVars (Set.fromList $ getVarNames pattern) expr) | (pattern, expr) <- defns]
 
 
-getVarNames :: [CorePatExpr] -> [Name]
-getVarNames pattern = foldl getVarNamesExpr [] pattern
-
-
-getVarNamesExpr :: [Name] -> CorePatExpr -> [Name]
-getVarNamesExpr names (ENum n) = names
-getVarNamesExpr names (EVar v) = v : names
-getVarNamesExpr names (EAp e1 e2) = (getVarNamesExpr names e1) ++ (getVarNamesExpr names e2) ++ names
-getVarNamesExpr names (EConstr t a) = names
-getVarNamesExpr names _ = error "Invalid pattern"
-
-
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr (PatExpr Name) (Set Name)
 calcFreeVars localVars (ENum n) = (Set.empty, ANum n)
 calcFreeVars localVars (EVar v) | Set.member v localVars = (Set.singleton v, AVar v)
