@@ -11,7 +11,7 @@ data Expr a
     | ENum Int                              -- numbers
     | EConstr Int Int                       -- constructor (tag, arity)
     | EAp (Expr a) (Expr a)                 -- applications
-    | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
+    | ELet IsRec [Defn a] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
     deriving (Show)
@@ -24,13 +24,13 @@ type PatExpr a = Expr a
 type CoreExpr = Expr CorePatExpr
 type IsRec = Bool
 type Alter a = (Int, [a], Expr a)
-type CoreAlt = Alter Name
+type CoreAlt = Alter CorePatExpr
 type Program a = [ScDefn a]
 type CoreProgram = Program CorePatExpr
 type ScDefn a = (Name, [PatternFunDef a])
 type CoreScDefn = ScDefn CorePatExpr
 type Defn a = (a, Expr a)
-type CoreDefn = Defn Name
+type CoreDefn = Defn CorePatExpr
 type Name = String
 
 

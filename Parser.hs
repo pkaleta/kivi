@@ -130,23 +130,28 @@ pProgram = pOneOrMoreWithSep pSc (pLit ";")
 pSc :: Parser CoreScDefn
 pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc var pattern equals expr = (var, [(pattern, expr)])
+        mkSc name pattern equals expr = (name, [(pattern, expr)])
 
-pPattern :: Parser CoreExpr
-pPattern = pZeroOrMore ((pVar `pApply` EVar) `pOr` (pNum `pApply` ENum) `pOr` pConstr)
+pPattern :: Parser [CorePatExpr]
+pPattern = pZeroOrMore pPatternExpr
+
+
+pPatternExpr :: Parser CorePatExpr
+pPatternExpr = (pVar `pApply` EVar) `pOr` (pNum `pApply` ENum)
+
 
 pExpr :: Parser CoreExpr
 pExpr =
     pThen4 (mkLetExpr False) (pLit "let") pDefns (pLit "in") pExpr `pOr`
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
-    pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
+    pThen4 mkLambdaExpr (pLit "\\") pPattern (pLit ".") pExpr `pOr`
     pOrExpr `pOr`
     pAtomicExpr
     where
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
-        mkLambdaExpr _ vars _ expr = ELam vars expr
+        mkLambdaExpr _ pattern _ expr = ELam pattern expr
 
 pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =
@@ -167,15 +172,15 @@ pDefns :: Parser [CoreDefn]
 pDefns = pOneOrMoreWithSep pDefn (pLit ";")
 
 pDefn :: Parser CoreDefn
-pDefn = pThen3 mkDefn pVar (pLit "=") pExpr
+pDefn = pThen3 mkDefn pPatternExpr (pLit "=") pExpr
     where
-        mkDefn var _ expr = (var, expr)
+        mkDefn patExpr _ expr = (patExpr, expr)
 
 pAlts :: Parser [CoreAlt]
 pAlts = pOneOrMoreWithSep pAlt (pLit ";")
 
 pAlt :: Parser CoreAlt
-pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) (pZeroOrMore pVar) (pLit "->") pExpr
+pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) pPattern (pLit "->") pExpr
     where
         mkAlt num vars _ expr = (num, vars, expr)
         mkNum _ num _ = num
