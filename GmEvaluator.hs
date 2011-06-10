@@ -139,22 +139,21 @@ newState (NInd addr) state = putCode [Unwind] $ putStack stack' state
         stack' = addr : (tail $ getStack state)
 
 
-chooseMatchingCode :: GmHeap -> [Addr] -> [(Pattern Name, GmCode)] -> GmCode
+chooseMatchingCode :: GmHeap -> [Addr] -> [(CorePattern, GmCode)] -> GmCode
 chooseMatchingCode heap args [] = error "No matching code could be found"
 chooseMatchingCode heap args ((pattern, code) : defns) | patternMatch heap args pattern = code
                                                        | otherwise = chooseMatchingCode heap args defns
 
-patternMatch :: GmHeap -> [Addr] -> Pattern Name -> Bool
+patternMatch :: GmHeap -> [Addr] -> CorePattern -> Bool
 patternMatch heap as pattern =
     trace ("##############" ++ show as ++ ", " ++ show pattern ++ ", " ++ show (foldl check True $ zip as pattern)) foldl check True $ zip as pattern
     where
-        check res (addr, patElem) =
-            case isVarName patElem of
-                False -> res && (v1 == v2)
+        check res (addr, patExpr) =
+            case patExpr of
+                (EVar v) -> res
+                (ENum n1) -> res && (n1 == n2)
                     where
-                        (NNum v1) = hLookup heap addr
-                        v2 = read patElem::Int
-                True -> res
+                        (NNum n2) = hLookup heap addr
 
 
 unwindDump state =
@@ -180,7 +179,8 @@ pushglobalPack name state =
             putStack (addr : stack) $ putHeap heap' state
             where
                 varNames = map (\c -> [c]) ['a'..'z']
-                (heap', addr) = hAlloc heap $ NGlobal n [(take n varNames, [Pack t n, Update 0, Unwind])]
+                vars = map EVar varNames
+                (heap', addr) = hAlloc heap $ NGlobal n [(take n vars, [Pack t n, Update 0, Unwind])]
                 [t, n] = map read $ split "," (name =~ "[0-9]+,[0-9]+" :: String)
     where
         globals = getGlobals state
