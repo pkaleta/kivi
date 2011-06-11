@@ -78,25 +78,6 @@ pEmpty ret tokens = [(ret, tokens)]
 pOneOrMore :: Parser a -> Parser [a]
 pOneOrMore parser = pThen (:) parser (pZeroOrMore parser)
 
---test
-pHelloOrGoodbye :: Parser String
-pHelloOrGoodbye = (pLit "hello") `pOr` (pLit "goodbye")
-
---test
-pGreeting :: Parser (String, String)
-pGreeting =
-    pThen3 mkGreeting pHelloOrGoodbye pVar (pLit "!")
-    where
-        mkGreeting a b _ = (a, b)
-
---test
-pGreetings :: Parser [(String, String)]
-pGreetings = pZeroOrMore pGreeting
-
---test
-pGreetingsN :: Parser Int
-pGreetingsN = (pZeroOrMore pGreeting) `pApply` length
-
 pApply :: Parser a -> (a -> b) -> Parser b
 pApply parser f tokens =
     [(f v, ts) | (v, ts) <- (parser tokens)]
@@ -110,11 +91,6 @@ pOneOrMoreWithSep parser sepParser =
             `pOr`
             (pEmpty [])
 
--- test
-pSepGreets :: Parser [(String, String)]
-pSepGreets = pOneOrMoreWithSep pGreeting (pLit ";")
-    where
-        combine x xs = x:xs
 
 --syntax analyser implementation
 syntax :: [Token] -> CoreProgram
@@ -137,7 +113,22 @@ pPattern = pZeroOrMore pPatternExpr
 
 
 pPatternExpr :: Parser CorePatExpr
-pPatternExpr = (pVar `pApply` EVar) `pOr` (pNum `pApply` ENum)
+pPatternExpr =
+    ((pOneOrMore pAtomicPatternExpr) `pApply` mkApChain)-- `pOr`
+    where
+        mkApChain (expr : exprs) = foldl EAp expr exprs
+
+
+pAtomicPatternExpr :: Parser CorePatExpr
+pAtomicPatternExpr =
+    (pVar `pApply` EVar) `pOr`
+    (pNum `pApply` ENum) `pOr`
+    pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
+    pThen3 mkParenExpr (pLit "(") pAtomicPatternExpr (pLit ")")
+    where
+        mkParenExpr _ expr _ = expr
+        mkConstr _ _ constr _ = constr
+        mkTwoNumbers tag _ arity = EConstr tag arity
 
 
 pExpr :: Parser CoreExpr
@@ -166,7 +157,7 @@ pConstr :: Parser CoreExpr
 pConstr = pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}")
     where
         mkConstr _ _ constr _ = constr
-        mkTwoNumbers a _ b = EConstr a b
+        mkTwoNumbers tag _ arity = EConstr tag arity
 
 pDefns :: Parser [CoreDefn]
 pDefns = pOneOrMoreWithSep pDefn (pLit ";")
