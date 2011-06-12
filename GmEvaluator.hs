@@ -374,7 +374,7 @@ collectArgExpr heap (patExpr@(EAp e1 e2), addr) =
 collectArgExpr heap ((EVar v), addr) = [addr]
 collectArgExpr heap (patExpr@(ENum n1), addr) =
     case hLookup heap addr of
-        (NNum n2) | n1 == n2 -> [addr]
+        (NNum n2) | n1 == n2 -> []
         expr -> error $ "Incorrect pattern found, tried to match pattern: " ++ show patExpr ++ " to expression: " ++ show expr
 collectArgExpr heap (patExpr@(EConstr t a1), addr) =
     case hLookup heap addr of

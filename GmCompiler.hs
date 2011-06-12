@@ -77,8 +77,23 @@ allocateSc heap (name, argc, defns) = (heap', (name, addr))
 compileSc :: CoreScDefn -> GmCompiledSc
 compileSc (name, defns) = (name, n, defns')
     where
-        defns' = [(pattern, [Match pattern] ++ (compileR n expr $ zip (getVarNames pattern) [0..])) | (pattern, expr) <- defns]
+        defns' = [(pattern, [Match pattern] ++ (compileR ((countPatternVars pattern) + n) expr $ zip (getVarNames pattern) [0..])) | (pattern, expr) <- defns]
         n = length $ fst $ head defns
+
+
+countPatternVars :: CorePattern -> Int
+countPatternVars pattern = foldl countPatternVarsExpr 0 pattern
+
+
+countPatternVarsExpr :: Int -> CorePatExpr -> Int
+countPatternVarsExpr sum (EVar v) = sum + 1
+countPatternVarsExpr sum (ENum n) = sum
+countPatternVarsExpr sum (EConstr t a) = sum
+countPatternVarsExpr sum (EAp e1 e2) = sum1
+    where
+        sum0 = countPatternVarsExpr sum e1
+        sum1 = countPatternVarsExpr sum0 e2
+
 
 
 compileR :: Int -> GmCompiler
