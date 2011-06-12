@@ -31,7 +31,7 @@ runD :: [Char] -> [Char]
 runD = show . analyseDeps . parse
 
 runTest :: [Char] -> [Char]
-runTest = show . lambdaLift . parse
+runTest = show . eval . compile . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
@@ -155,6 +155,17 @@ patternMatch heap as pattern =
                 (ENum n1) -> res && (n1 == n2)
                     where
                         (NNum n2) = hLookup heap addr
+                (EAp e1 e2) ->
+                    res && apEqual heap patExpr (hLookup heap addr)
+
+
+apEqual :: GmHeap -> CorePatExpr -> Node -> Bool
+apEqual heap (EAp pe1 pe2) (NAp a1 a2) =
+    apEqual heap pe1 (hLookup heap a1) && apEqual heap pe2 (hLookup heap a2)
+apEqual heap (EVar v) _ = True
+apEqual heap (ENum n1) (NNum n2) = n1 == n2
+apEqual heap (EConstr t1 _) (NConstr t2 _) = t1 == t2
+apEqual _ _ _ = False
 
 
 unwindDump state =

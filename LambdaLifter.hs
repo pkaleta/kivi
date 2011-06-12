@@ -127,12 +127,12 @@ newNamesExpr (ns, mapping) (EVar v) = ((ns', mapping'), (EVar v'))
     where
         (ns', v') = getName ns v
         mapping' = Map.insert v v' mapping
---newNamesExpr (ns, mapping) (EAp e1 e2) =
---    ((ns2, mapping2), EAp e1' e2')
---    where
---        ((ns1, mapping1), e1') = newNamesExpr (ns, mapping) e1
---        ((ns2, mapping2), e2') = newNamesExpr (ns1, mapping1) e2
---newNamesExpr (ns, mapping) (EConstr t a) = ((ns, mapping), EConstr t a)
+newNamesExpr (ns, mapping) (EAp e1 e2) =
+    ((ns2, mapping2), EAp e1' e2')
+    where
+        ((ns1, mapping1), e1') = newNamesExpr (ns, mapping) e1
+        ((ns2, mapping2), e2') = newNamesExpr (ns1, mapping1) e2
+newNamesExpr (ns, mapping) (EConstr t a) = ((ns, mapping), EConstr t a)
 
 
 -- generic renaming function
