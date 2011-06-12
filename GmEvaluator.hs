@@ -43,7 +43,7 @@ showResults (state : states) =
                 topNode = (hLookup heap topAddr)
                 topAddr = head $ getStack state
         False ->
-            "output: " ++ show output ++ "\ncode" ++ show code ++ "\nstack: " ++ show stack ++ "\nvstack: " ++ show vstack ++ "\n\n" ++ showResults states
+            "output: " ++ show output ++ "\ncode: " ++ show code ++ "\nstack: " ++ show stack ++ "\nvstack: " ++ show vstack ++ "\n\n" ++ showResults states
     where
         code = getCode state
         stack = getStack state
@@ -164,7 +164,7 @@ apEqual heap (EAp pe1 pe2) (NAp a1 a2) =
     apEqual heap pe1 (hLookup heap a1) && apEqual heap pe2 (hLookup heap a2)
 apEqual heap (EVar v) _ = True
 apEqual heap (ENum n1) (NNum n2) = n1 == n2
-apEqual heap (EConstr t1 _) (NConstr t2 _) = t1 == t2
+apEqual heap (EConstr t a1) (NGlobal a2 args) = a1 == a2
 apEqual _ _ _ = False
 
 

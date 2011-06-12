@@ -156,7 +156,7 @@ compileC (EVar v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
-compileC (EConstr t n) env = [Pack t n]--[Pushglobal $ constrFunctionName t n]
+compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
 compileC (ENum n) env = [Pushint n]
 compileC (EAp e1 e2) env =
     compileC e2 env ++
