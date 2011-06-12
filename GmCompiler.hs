@@ -74,10 +74,10 @@ allocateSc heap (name, argc, defns) = (heap', (name, addr))
         (heap', addr) = hAlloc heap $ NGlobal argc defns
 
 
-compileSc :: ScDefn CorePatExpr -> GmCompiledSc
+compileSc :: CoreScDefn -> GmCompiledSc
 compileSc (name, defns) = (name, n, defns')
     where
-        defns' = [(pattern, compileR n expr $ zip (getVarNames pattern) [0..]) | (pattern, expr) <- defns]
+        defns' = [(pattern, [Match pattern] ++ (compileR n expr $ zip (getVarNames pattern) [0..])) | (pattern, expr) <- defns]
         n = length $ fst $ head defns
 
 

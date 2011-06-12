@@ -75,36 +75,37 @@ step state =
         (i : is) = getCode state
 
 dispatch :: Instruction -> GmState -> GmState
-dispatch Unwind         = unwind
-dispatch (Pushglobal f) = pushglobal f
-dispatch (Pushint n)    = pushint n
-dispatch (Push n)       = push n
-dispatch Mkap           = mkap
-dispatch (Update n)     = update n
-dispatch (Pop n)        = pop n
-dispatch (Slide n)      = slide n
-dispatch (Alloc n)      = alloc n
-dispatch Eval           = eval2
-dispatch Add            = add
-dispatch Sub            = sub
-dispatch Mul            = mul
-dispatch Div            = div2
-dispatch Neg            = neg
-dispatch Eq             = eq
-dispatch Ne             = ne
-dispatch Lt             = lt
-dispatch Le             = le
-dispatch Gt             = gt
-dispatch Ge             = ge
-dispatch (Cond ist isf)   = cond ist isf
-dispatch (Pack t n)   = pack t n
-dispatch (Casejump bs)  = casejump bs
-dispatch (Split n)      = split2 n
-dispatch (Print)        = print2
-dispatch (Pushbasic n)  = pushbasic n
-dispatch (MkBool)       = mkbool
-dispatch (MkInt)        = mkint
-dispatch (Get)          = get
+dispatch Unwind          = unwind
+dispatch (Pushglobal f)  = pushglobal f
+dispatch (Pushint n)     = pushint n
+dispatch (Push n)        = push n
+dispatch Mkap            = mkap
+dispatch (Update n)      = update n
+dispatch (Pop n)         = pop n
+dispatch (Slide n)       = slide n
+dispatch (Alloc n)       = alloc n
+dispatch Eval            = eval2
+dispatch Add             = add
+dispatch Sub             = sub
+dispatch Mul             = mul
+dispatch Div             = div2
+dispatch Neg             = neg
+dispatch Eq              = eq
+dispatch Ne              = ne
+dispatch Lt              = lt
+dispatch Le              = le
+dispatch Gt              = gt
+dispatch Ge              = ge
+dispatch (Cond ist isf)  = cond ist isf
+dispatch (Pack t n)      = pack t n
+dispatch (Casejump bs)   = casejump bs
+dispatch (Split n)       = split2 n
+dispatch (Print)         = print2
+dispatch (Pushbasic n)   = pushbasic n
+dispatch (MkBool)        = mkbool
+dispatch (MkInt)         = mkint
+dispatch (Get)           = get
+dispatch (Match pattern) = match2 pattern
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -350,6 +351,36 @@ split2 n state =
             False -> error "Incorrect number of constructor parameters."
         (NConstr t args) = hLookup (getHeap state) a
         (a : as) = getStack state
+
+
+match2 :: CorePattern -> GmState -> GmState
+match2 pattern state =
+    trace ("********************* pattern: " ++ show (zip pattern stack) ++ ", " ++ show args) putStack (args ++ stack) state
+    where
+        args = foldl (collectArg $ getHeap state) [] (zip pattern stack)
+        stack = getStack state
+
+
+collectArg :: GmHeap -> [Addr] -> (CorePatExpr, Addr) -> [Addr]
+collectArg heap acc exprAddr = acc ++ collectArgExpr heap exprAddr
+
+collectArgExpr :: GmHeap -> (CorePatExpr, Addr) -> [Addr]
+collectArgExpr heap (patExpr@(EAp e1 e2), addr) =
+    trace ("#####: " ++ show (hLookup heap addr)) collectArgExpr heap (e1, a1) ++ collectArgExpr heap (e2, a2)
+    where
+        (a1, a2) = case hLookup heap addr of
+            (NAp a1 a2) -> (a1, a2)
+            expr -> error $ "Incorrect pattern found, tried to match pattern: " ++ show patExpr ++ " to expression: " ++ show expr
+collectArgExpr heap ((EVar v), addr) = [addr]
+collectArgExpr heap (patExpr@(ENum n1), addr) =
+    case hLookup heap addr of
+        (NNum n2) | n1 == n2 -> [addr]
+        expr -> error $ "Incorrect pattern found, tried to match pattern: " ++ show patExpr ++ " to expression: " ++ show expr
+collectArgExpr heap (patExpr@(EConstr t a1), addr) =
+    case hLookup heap addr of
+        (NGlobal a2 args) | a1 == a2 -> []
+        expr -> error $ "Incorrect pattern found, tried to match pattern: " ++ show patExpr ++ " to expression: " ++ show expr
+
 
 print2 :: GmState -> GmState
 print2 state =
