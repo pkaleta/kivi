@@ -114,11 +114,16 @@ pPattern = pZeroOrMore pPatternExpr
 
 pPatternExpr :: Parser CorePatExpr
 pPatternExpr =
-    ((pOneOrMore pAtomicPatternExpr) `pApply` mkApChain) `pOr`
-    pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
+    pAtomicPatternExpr `pOr`
+    pThen3 mkParenExpr (pLit "(") pConstrPatternExpr (pLit ")")
+    where
+        mkParenExpr _ expr _ = expr
+
+
+pConstrPatternExpr :: Parser CorePatExpr
+pConstrPatternExpr = ((pOneOrMore pAtomicPatternExpr) `pApply` mkApChain)
     where
         mkApChain (expr : exprs) = foldl EAp expr exprs
-        mkParenExpr _ expr _ = expr
 
 
 pAtomicPatternExpr :: Parser CorePatExpr
