@@ -80,7 +80,7 @@ data Instruction = Unwind
                  | MkBool
                  | MkInt
                  | Get
-                 | Match CorePattern
+                 | Match Int CorePattern
     deriving Show
 
 instance Eq Instruction

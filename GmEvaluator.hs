@@ -105,7 +105,7 @@ dispatch (Pushbasic n)   = pushbasic n
 dispatch (MkBool)        = mkbool
 dispatch (MkInt)         = mkint
 dispatch (Get)           = get
-dispatch (Match pattern) = match2 pattern
+dispatch (Match arity pattern) = match2 arity pattern
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -152,7 +152,7 @@ patternMatch heap as pattern =
     where
         check res (addr, patExpr) =
             case patExpr of
-                (EVar v) -> res
+                (EVar v) -> trace ("jestem: " ++ show v) res
                 (ENum n1) -> res && (n1 == n2)
                     where
                         (NNum n2) = hLookup heap addr
@@ -354,9 +354,9 @@ split2 n state =
         (a : as) = getStack state
 
 
-match2 :: CorePattern -> GmState -> GmState
-match2 pattern state =
-    trace ("********************* pattern: " ++ show (zip pattern stack) ++ ", " ++ show args) putStack (args ++ stack) state
+match2 :: Int -> CorePattern -> GmState -> GmState
+match2 arity pattern state =
+    trace ("********************* pattern: " ++ show (zip pattern stack) ++ ", " ++ show args) putStack (args ++ drop arity stack) state
     where
         args = foldl (collectArg $ getHeap state) [] (zip pattern stack)
         stack = getStack state
