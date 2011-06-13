@@ -165,7 +165,8 @@ apEqual heap (EAp pe1 pe2) (NAp a1 a2) =
     apEqual heap pe1 (hLookup heap a1) && apEqual heap pe2 (hLookup heap a2)
 apEqual heap (EVar v) _ = True
 apEqual heap (ENum n1) (NNum n2) = n1 == n2
-apEqual heap (EConstr t a1) (NGlobal a2 args) = a1 == a2
+apEqual heap (EConstr t a1) (NGlobal a2 [(pattern, (instr : is))]) = a1 == a2 && t == tag
+    where (Pack tag arity) = instr
 apEqual _ _ _ = False
 
 

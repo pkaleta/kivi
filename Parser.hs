@@ -115,13 +115,7 @@ pPattern = pZeroOrMore pPatternExpr
 pPatternExpr :: Parser CorePatExpr
 pPatternExpr =
     pAtomicPatternExpr `pOr`
-    pThen3 mkParenExpr (pLit "(") pConstrPatternExpr (pLit ")")
-    where
-        mkParenExpr _ expr _ = expr
-
-
-pConstrPatternExpr :: Parser CorePatExpr
-pConstrPatternExpr = ((pOneOrMore pAtomicPatternExpr) `pApply` mkApChain)
+    ((pOneOrMore pAtomicPatternExpr) `pApply` mkApChain)
     where
         mkApChain (expr : exprs) = foldl EAp expr exprs
 
@@ -131,7 +125,7 @@ pAtomicPatternExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
     pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
-    pThen3 mkParenExpr (pLit "(") pAtomicPatternExpr (pLit ")")
+    pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
     where
         mkParenExpr _ expr _ = expr
         mkConstr _ _ constr _ = constr
@@ -218,7 +212,7 @@ pAddExpr :: Parser CoreExpr
 pAddExpr = pThen assembleOp pMultExpr pAddExprC
 
 pAddExprC :: Parser PartialExpr
-pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr` 
+pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr`
     (pThen FoundOp (pLit "-") pMultExpr) `pOr`
     (pEmpty NoOp)
 
