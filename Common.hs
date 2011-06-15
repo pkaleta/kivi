@@ -10,21 +10,31 @@ data Expr a
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
-    | ELam [a] (Expr a)                     -- lambda abstractions
+    | ELam [Pattern] (Expr a)                     -- lambda abstractions
     deriving (Show)
 
 type CoreExpr = Expr Name
 type IsRec = Bool
-type Alter a = (Int, [a], Expr a)
+type Alter a = (Pattern, Expr a)
 type CoreAlt = Alter Name
 type Program a = [ScDefn a]
 type CoreProgram = Program Name
-type ScDefn a = (Name, [a], Expr a)
+type ScDefn a = (Name, [([Pattern], Expr a)])
 type CoreScDefn = ScDefn Name
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
-
 type Name = String
+
+
+data Pattern = Num Int
+             | Var Name
+             | Constr Int Int [Pattern]
+    deriving (Show)
+
+
+type Equation = ([Pattern], Expr Name)
+
+
 
 -- GmEvaluator
 type GmState = (GmOutput,
