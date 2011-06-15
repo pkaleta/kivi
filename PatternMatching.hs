@@ -83,6 +83,7 @@ makeName n = "_u" ++ show n
 
 
 partition :: (Eq b) => (a -> b) -> [a] -> [[a]]
+partition f [] = []
 partition f (x : xs) = acc ++ [cur]
     where
         (acc, cur) = foldl partition' ([], [x]) xs

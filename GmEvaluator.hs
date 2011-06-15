@@ -28,7 +28,7 @@ import Data.List.Utils
 --runD = show . analyseDeps . parse
 
 runTest :: String -> String
-runTest showResults . eval . compile . parse
+runTest = match . mergePatterns . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
