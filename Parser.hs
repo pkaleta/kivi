@@ -148,7 +148,7 @@ pProgram = pOneOrMoreWithSep pSc (pLit ";")
 pSc :: Parser CoreScDefn
 pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc name vars equals expr = (name, vars, expr)
+        mkSc name pattern equals expr = (name, [(pattern, expr)])
 
 
 pExpr :: Parser CoreExpr
