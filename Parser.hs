@@ -4,10 +4,13 @@ module Parser where
 import Char
 import Lexer
 import Common
+import List
+import Debug.Trace
 
 
 data PartialExpr = NoOp | FoundOp Name CoreExpr
 type Parser a = [Token] -> [(a, [Token])]
+type Program a = [ProgramElement a]
 
 
 isAtomicExpr :: Expr a -> Bool
@@ -18,11 +21,19 @@ isAtomicExpr _ = False
 
 -- line number and token
 
-keywords = ["let", "letrec", "case", "in", "of", "Pack"]
+keywords = ["data", "let", "letrec", "case", "in", "of", "Pack"]
 
 --parser implementation
 parse :: String -> CoreProgram
-parse = syntax . clex
+parse = split . syntax . clex
+
+
+-- splits datatypes and supercombinators
+split :: Program Name -> CoreProgram
+split = partition isDataType
+    where
+        isDataType (DataType name constructors) = True
+        isDataType _ = False
 
 
 -- parser functions
@@ -105,13 +116,12 @@ pOneOrMoreWithSep parser sepParser =
     pThen (:) parser restParser
     where
         restParser =
-            (pThen (\_ b -> b) sepParser (pOneOrMoreWithSep parser sepParser))
-            `pOr`
+            (pThen (\_ b -> b) sepParser (pOneOrMoreWithSep parser sepParser)) `pOr`
             (pEmpty [])
 
 
 --syntax analyser implementation
-syntax :: [Token] -> CoreProgram
+syntax :: [Token] -> Program Name
 syntax = takeFirstParse . pProgram
     where
         takeFirstParse ((prog, []) : rest) = prog
@@ -125,12 +135,12 @@ pPattern = pZeroOrMore pPatternExpr
 
 pPatternExpr :: Parser Pattern
 pPatternExpr =
-    (pVar `pApply` Var) `pOr`
-    (pNum `pApply` Num) `pOr`
+    (pVar `pApply` PVar) `pOr`
+    (pNum `pApply` PNum) `pOr`
     pThen mkConstr pConstr (pZeroOrMore pPatternExpr) `pOr`
     pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
     where
-        mkConstr (EConstr tag arity) patExprs = Constr tag arity patExprs
+        mkConstr (EConstr tag arity) patExprs = PConstr tag arity patExprs
         mkParenExpr _ expr _ = expr
 
 
@@ -141,14 +151,22 @@ pConstr = pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pL
         mkTwoNumbers a _ b = EConstr a b
 
 
-pProgram :: Parser CoreProgram
-pProgram = pOneOrMoreWithSep pSc (pLit ";")
+pProgram :: Parser (Program Name)
+pProgram = pOneOrMoreWithSep (pSc `pOr` pDataType) (pLit ";")
 
 
-pSc :: Parser CoreScDefn
+pDataType :: Parser CoreProgramElement
+pDataType = pThen4 mkDataType (pLit "data") pVar (pLit "=") (pOneOrMoreWithSep pConstr $ pLit "|")
+    where
+        mkDataType _ name _ cs = DataType name constructors
+            where
+                constructors = [(t, a) | (EConstr t a) <- cs]
+
+
+pSc :: Parser CoreProgramElement
 pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc name pattern equals expr = (name, [(pattern, expr)])
+        mkSc name pattern equals expr = ScDefn name [(pattern, expr)]
 
 
 pExpr :: Parser CoreExpr
