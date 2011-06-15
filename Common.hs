@@ -1,6 +1,8 @@
 module Common where
 
+
 import Utils
+
 
 -- Parser
 data Expr a
@@ -10,12 +12,13 @@ data Expr a
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [Defn a] (Expr a)          -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
-    | ELam [Pattern] (Expr a)               -- lambda abstractions
+    | ELam [a] (Expr a)               -- lambda abstractions
     | Fatbar (Expr a) (Expr a)
     deriving (Show)
 
-type CoreProgramElement = ProgramElement Name
-data ProgramElement a = ScDefn a [Equation a] | DataType Name [Constr]
+
+data ProgramElement a = ScDefn Name [a] (Expr a)
+                      | DataType Name [Constr]
     deriving (Show)
 
 type Constr = (Int, Int)
@@ -24,8 +27,7 @@ type CoreExpr = Expr Name
 type IsRec = Bool
 type Alter a = (Pattern, Expr a)
 type CoreAlt = Alter Name
---type ScDefn a = (Name, [Equation a])
---type CoreScDefn = ScDefn Name
+type Program a = ([ProgramElement a], [ProgramElement a])
 type CoreProgram = ([ProgramElement Name], [ProgramElement Name])
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
@@ -36,10 +38,6 @@ data Pattern = PNum Int
              | PVar Name
              | PConstr Int Int [Pattern]
     deriving (Show)
-
-
-type CoreEquation = Equation Name
-type Equation a = ([Pattern], Expr a)
 
 
 -- GmEvaluator

@@ -9,14 +9,14 @@ import Parser
 import Debug.Trace
 
 
-mergePatterns :: CoreProgram -> CoreProgram
+mergePatterns :: PatTypeScPair -> PatTypeScPair
 mergePatterns (dts, scs) = (dts, scs')
     where
-        scs' = [ScDefn name defns | (name, defns) <- Map.toList $ foldl mergePattern Map.empty scs]
+        scs' = [PatScDefn name defns | (name, defns) <- Map.toList $ foldl mergePattern Map.empty scs]
 
 
-mergePattern :: Map Name [CoreEquation] -> ProgramElement Name -> Map Name ([CoreEquation])
-mergePattern scMap (ScDefn name defns) = -- it would always contain only one definition
+mergePattern :: Map Name [Equation] -> PatProgramElement -> Map Name [Equation]
+mergePattern scMap (PatScDefn name defns) = -- it would always contain only one definition
     Map.alter update name scMap
     where
         update Nothing = Just defns
@@ -24,8 +24,8 @@ mergePattern scMap (ScDefn name defns) = -- it would always contain only one def
 
 
 --TODO: implement
-arity :: Int -> [CoreProgramElement] -> Int
-arity tag (DataType name cs : types) =
+arity :: Int -> [PatProgramElement] -> Int
+arity tag (PatDataType name cs : types) =
     case findConstr tag cs of
         Nothing -> arity tag types
         Just (t, a) -> a
@@ -33,8 +33,8 @@ arity tag [] = error $ "Could not find constructor with tag: " ++ show tag
 
 
 --TODO: implement
-constructors :: Int -> [CoreProgramElement] -> [Int]
-constructors tag (DataType name cs : types) =
+constructors :: Int -> [PatProgramElement] -> [Int]
+constructors tag (PatDataType name cs : types) =
     case findConstr tag cs of
         Nothing -> constructors tag types
         Just (t, a) -> [t | (t, a) <- cs]
@@ -47,7 +47,7 @@ findConstr tag ((t, a) : cs) | tag == t = Just (t, a)
 findConstr tag [] = Nothing
 
 
-subst :: Expr Name -> Name -> Name -> Expr Name
+subst :: Expr Pattern -> Name -> Name -> Expr Pattern
 subst (ENum n) new old = ENum n
 subst (EVar v) new old | v == old  = EVar new
                        | otherwise = EVar v
@@ -64,16 +64,16 @@ subst (ECase expr alts) new old = ECase expr' alts'
         alts' = [(pattern, subst rhs new old) | (pattern, rhs) <- alts]
 
 
-isVar :: CoreEquation -> Bool
+isVar :: Equation -> Bool
 isVar (PVar name : ps, expr) = True
 isVar _ = False
 
 
-isConstr :: CoreEquation -> Bool
+isConstr :: Equation -> Bool
 isConstr eq = not $ isVar eq
 
 
-getConstr :: CoreEquation -> Int
+getConstr :: Equation -> Int
 getConstr ((PConstr tag arity ps') : ps, expr) = tag
 getConstr x = error $ show x
 
@@ -94,33 +94,54 @@ partition f (x : xs) = acc ++ [cur]
                 False -> (acc ++ [cur], [y])
 
 
-match :: CoreProgram -> CoreProgram
-match (dts, scs) = (dts, scs')
+match :: PatTypeScPair -> CoreProgram
+match (dts, scs) = (dts', scs')
     where
         scs' = List.map mapSc scs
+        dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
 
-        mapSc (ScDefn name eqs) = ScDefn name [([], matchEquations dts n vars eqs $ EVar "Nop")]
+        mapSc (PatScDefn name eqs) = ScDefn name vars $ matchEquations dts n vars eqs $ EVar "Nop"
             where
                 (patterns, expr) = head eqs
                 n = length patterns
                 vars = List.map makeName [1..n]
 
 
-matchEquations :: [CoreProgramElement] -> Int -> [Name] -> [CoreEquation] -> Expr Name -> Expr Name
-matchEquations dts n [] eqs def = foldr Fatbar def [expr | ([], expr) <- eqs]
+matchExpr :: [PatProgramElement] -> Expr Pattern -> CoreExpr
+matchExpr dts (ENum n) = ENum n
+matchExpr dts (EVar v) = EVar v
+matchExpr dts (EConstr t a) = EConstr t a
+matchExpr dts (EAp e1 e2) = EAp (matchExpr dts e1) (matchExpr dts e2)
+matchExpr dts (ELam pattern expr) = ELam args' expr'
+    where
+        name = makeName 1
+        args' = [name]
+        expr' = matchEquations dts 1 args' [(pattern, expr)] (EVar "Nop")
+--TODO: implement cases other than EVar
+matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
+    where
+        expr' = matchExpr dts expr
+        defns' = [(v, matchExpr dts expr) | (PVar v, rhs) <- defns]
+--TODO: what about case?
+
+
+matchEquations :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchEquations dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
+--TODO: get rid of Fatbar
+--foldr Fatbar def [matchExpr dts expr | ([], expr) <- eqs]
 matchEquations dts n vs eqs def = foldr (matchVarCon dts n vs) def $ PatternMatching.partition isVar eqs
 
 
-matchVarCon :: [CoreProgramElement] -> Int -> [Name] -> [CoreEquation] -> Expr Name -> Expr Name
+matchVarCon :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchVarCon dts n vars eqs def | isVar $ head eqs = matchVar dts n vars eqs def
                                | otherwise = matchConstr dts n vars eqs def
 
 
-matchVar :: [CoreProgramElement] -> Int -> [Name] -> [CoreEquation] -> Expr Name -> Expr Name
+matchVar :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchVar dts n (var : vars) eqs def = matchEquations dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] $ def
 
 
-matchConstr :: [CoreProgramElement] -> Int -> [Name] -> [CoreEquation] -> Expr Name -> Expr Name
+matchConstr :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchConstr dts n vars@(v : vs) eqs def =
     ECase (EVar v) [matchAlter dts tag n vars (choose tag eqs) def | tag <- tags]
     where
@@ -134,7 +155,7 @@ matchConstr dts n vars@(v : vs) eqs def =
         isConstr t _ = False
 
 
-matchAlter :: [CoreProgramElement] -> Int -> Int -> [Name] -> [CoreEquation] -> Expr Name -> Alter Name
+matchAlter :: [PatProgramElement] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
 matchAlter dts tag n (v : vs) eqs def =
     (PConstr tag n' $ List.map PVar vs', matchEquations dts (n' + n) (vs' ++ vs) eqs' def)
     where

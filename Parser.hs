@@ -8,9 +8,16 @@ import List
 import Debug.Trace
 
 
-data PartialExpr = NoOp | FoundOp Name CoreExpr
+data PartialExpr = NoOp | FoundOp Name (Expr Pattern)
 type Parser a = [Token] -> [(a, [Token])]
-type Program a = [ProgramElement a]
+type Equation = ([Pattern], Expr Pattern)
+
+data PatProgramElement = PatScDefn Name [Equation]
+                       | PatDataType Name [Constr]
+    deriving (Show)
+
+type PatProgram = [PatProgramElement]
+type PatTypeScPair = ([PatProgramElement], [PatProgramElement])
 
 
 isAtomicExpr :: Expr a -> Bool
@@ -24,15 +31,15 @@ isAtomicExpr _ = False
 keywords = ["data", "let", "letrec", "case", "in", "of", "Pack"]
 
 --parser implementation
-parse :: String -> CoreProgram
+parse :: String -> PatTypeScPair
 parse = split . syntax . clex
 
 
 -- splits datatypes and supercombinators
-split :: Program Name -> CoreProgram
+split :: PatProgram -> PatTypeScPair
 split = partition isDataType
     where
-        isDataType (DataType name constructors) = True
+        isDataType (PatDataType name constructors) = True
         isDataType _ = False
 
 
@@ -121,7 +128,7 @@ pOneOrMoreWithSep parser sepParser =
 
 
 --syntax analyser implementation
-syntax :: [Token] -> Program Name
+syntax :: [Token] -> PatProgram
 syntax = takeFirstParse . pProgram
     where
         takeFirstParse ((prog, []) : rest) = prog
@@ -144,32 +151,32 @@ pPatternExpr =
         mkParenExpr _ expr _ = expr
 
 
-pConstr :: Parser CoreExpr
+pConstr :: Parser (Expr Pattern)
 pConstr = pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}")
     where
         mkConstr _ _ constr _ = constr
         mkTwoNumbers a _ b = EConstr a b
 
 
-pProgram :: Parser (Program Name)
+pProgram :: Parser PatProgram
 pProgram = pOneOrMoreWithSep (pSc `pOr` pDataType) (pLit ";")
 
 
-pDataType :: Parser CoreProgramElement
+pDataType :: Parser PatProgramElement
 pDataType = pThen4 mkDataType (pLit "data") pVar (pLit "=") (pOneOrMoreWithSep pConstr $ pLit "|")
     where
-        mkDataType _ name _ cs = DataType name constructors
+        mkDataType _ name _ cs = PatDataType name constructors
             where
                 constructors = [(t, a) | (EConstr t a) <- cs]
 
 
-pSc :: Parser CoreProgramElement
+pSc :: Parser PatProgramElement
 pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc name pattern equals expr = ScDefn name [(pattern, expr)]
+        mkSc name pattern equals expr = PatScDefn name [(pattern, expr)]
 
 
-pExpr :: Parser CoreExpr
+pExpr :: Parser (Expr Pattern)
 pExpr =
     pThen4 (mkLetExpr False) (pLit "let") pDefns (pLit "in") pExpr `pOr`
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
@@ -183,7 +190,7 @@ pExpr =
         mkLambdaExpr _ pattern _ expr = ELam pattern expr
 
 
-pAtomicExpr :: Parser CoreExpr
+pAtomicExpr :: Parser (Expr Pattern)
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
@@ -193,33 +200,33 @@ pAtomicExpr =
         mkParenExpr _ expr _ = expr
 
 
-pDefns :: Parser [CoreDefn]
+pDefns :: Parser [Defn Pattern]
 pDefns = pOneOrMoreWithSep pDefn (pLit ";")
 
 
-pDefn :: Parser CoreDefn
-pDefn = pThen3 mkDefn pVar (pLit "=") pExpr
+pDefn :: Parser (Defn Pattern)
+pDefn = pThen3 mkDefn pPatternExpr (pLit "=") pExpr
     where
-        mkDefn var _ expr = (var, expr)
+        mkDefn patExpr _ expr = (patExpr, expr)
 
 
-pAlts :: Parser [CoreAlt]
+pAlts :: Parser [Alter Pattern]
 pAlts = pOneOrMoreWithSep pAlt (pLit ";")
 
 
-pAlt :: Parser CoreAlt
+pAlt :: Parser (Alter Pattern)
 pAlt = pThen3 mkAlt pPatternExpr (pLit "->") pExpr
     where
         mkAlt pattern _ expr = (pattern, expr)
 
 
-assembleOp :: CoreExpr -> PartialExpr -> CoreExpr
+assembleOp :: Expr Pattern -> PartialExpr -> Expr Pattern
 assembleOp expr1 NoOp = expr1
 assembleOp expr1 (FoundOp name expr2) = EAp (EAp (EVar name) expr1) expr2
 
 
 -- or expression
-pOrExpr :: Parser CoreExpr
+pOrExpr :: Parser (Expr Pattern)
 pOrExpr = pThen assembleOp pAndExpr pOrExprC
 
 
@@ -228,7 +235,7 @@ pOrExprC = (pThen FoundOp (pLit "|") pOrExpr) `pOr` (pEmpty NoOp)
 
 
 -- and expression
-pAndExpr :: Parser CoreExpr
+pAndExpr :: Parser (Expr Pattern)
 pAndExpr = pThen assembleOp pRelOpExpr pAndExprC
 
 
@@ -237,7 +244,7 @@ pAndExprC = (pThen FoundOp (pLit "&") pAndExpr) `pOr` (pEmpty NoOp)
 
 
 -- rel op expression
-pRelOpExpr :: Parser CoreExpr
+pRelOpExpr :: Parser (Expr Pattern)
 pRelOpExpr = pThen assembleOp pAddExpr pRelOpExprC
 
 
@@ -250,7 +257,7 @@ pRelOp = (pLit "<") `pOr` (pLit "<=") `pOr` (pLit "==") `pOr` (pLit "!=") `pOr` 
 
 
 -- additive expression
-pAddExpr :: Parser CoreExpr
+pAddExpr :: Parser (Expr Pattern)
 pAddExpr = pThen assembleOp pMultExpr pAddExprC
 
 
@@ -261,7 +268,7 @@ pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr`
 
 
 -- multiplicative expression
-pMultExpr :: Parser CoreExpr
+pMultExpr :: Parser (Expr Pattern)
 pMultExpr = pThen assembleOp pApExpr pMultExprC
 
 pMultExprC :: Parser PartialExpr
@@ -271,7 +278,7 @@ pMultExprC = (pThen FoundOp (pLit "*") pMultExpr) `pOr`
 
 
 -- applicative expression
-pApExpr :: Parser CoreExpr
+pApExpr :: Parser (Expr Pattern)
 pApExpr = ((pOneOrMore pAtomicExpr) `pApply` mkApChain)
     where
         mkApChain (expr : exprs) = foldl EAp expr exprs
