@@ -5,6 +5,8 @@ import List
 import Common
 import Utils
 import Data.Map as Map
+import Parser
+import Debug.Trace
 
 
 mergePatterns :: CoreProgram -> CoreProgram
@@ -57,6 +59,7 @@ isConstr eq = not $ isVar eq
 
 getConstr :: Equation -> Int
 getConstr ((Constr tag arity ps') : ps, expr) = tag
+getConstr x = error $ show x
 
 
 makeName :: Int -> Name
@@ -92,18 +95,21 @@ matchConstr :: Int -> [Name] -> [Equation] -> Expr Name -> Expr Name
 matchConstr n vars@(v : vs) eqs def =
     ECase (EVar v) [matchAlter tag n vars (choose tag eqs) def | tag <- tags]
     where
+        -- it's sufficient to take only the head of equations since all of the
+        -- constructors in eqs will be constructors of the same type (assuming
+        -- that program is typechecked)
         tags = constructors $ getConstr $ head eqs
 
         choose tag eqs = List.filter (isConstr tag) eqs
         isConstr t1 (Constr t2 arity ps' : ps, expr) | t1 == t2 = True
-                                                     | otherwise = False
+        isConstr t _ = False
 
 
 matchAlter :: Int -> Int -> [Name] -> [Equation] -> Expr Name -> Alter Name
-matchAlter tag n vars eqs def =
-    (Constr tag n' $ List.map Var vars', match (n' + n) (vars' ++ vars) eqs' def)
+matchAlter tag n (v : vs) eqs def =
+    (Constr tag n' $ List.map Var vs', match (n' + n) (vs' ++ vs) eqs' def)
     where
         n' = arity tag
-        vars' = [makeName (n+i) | i <- [1..n']]
+        vs' = [makeName (n+i) | i <- [1..n']]
         eqs' = [(ps' ++ ps, expr) | ((Constr tag arity ps' : ps), expr) <- eqs]
 

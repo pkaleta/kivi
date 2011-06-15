@@ -8,24 +8,27 @@ import List
 import Common
 import Debug.Trace
 import GmCompiler
-import LambdaLifter
+--import LambdaLifter
 import Text.Regex.Posix
 import Data.List.Utils
-import DependencyAnalyser
+--import DependencyAnalyser
 --import Gc
 
 
-run :: [Char] -> [Char]
-run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyse . parse
+--run :: [Char] -> [Char]
+--run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . parse
+--
+--runS :: [Char] -> [Char]
+--runS = show . lambdaLift . parse
+--
+--runF :: [Char] -> [Char]
+--runF = show . lambdaLift . lazyLambdaLift . parse
+--
+--runD :: [Char] -> [Char]
+--runD = show . analyseDeps . parse
 
-runS :: [Char] -> [Char]
-runS = show . lambdaLift . parse
-
-runF :: [Char] -> [Char]
-runF = show . lambdaLift . lazyLambdaLift . parse
-
-runD :: [Char] -> [Char]
-runD = show . analyse . parse
+runTest :: String -> String
+runTest showResults . eval . compile . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""

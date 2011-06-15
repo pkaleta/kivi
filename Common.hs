@@ -11,6 +11,7 @@ data Expr a
     | ELet IsRec [(a, Expr a)] (Expr a)     -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [Pattern] (Expr a)                     -- lambda abstractions
+    | Fatbar (Expr a) (Expr a)
     deriving (Show)
 
 type CoreExpr = Expr Name
@@ -19,7 +20,7 @@ type Alter a = (Pattern, Expr a)
 type CoreAlt = Alter Name
 type Program a = [ScDefn a]
 type CoreProgram = Program Name
-type ScDefn a = (Name, [([Pattern], Expr a)])
+type ScDefn a = (Name, [Equation])
 type CoreScDefn = ScDefn Name
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
@@ -33,7 +34,6 @@ data Pattern = Num Int
 
 
 type Equation = ([Pattern], Expr Name)
-
 
 
 -- GmEvaluator
