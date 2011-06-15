@@ -23,7 +23,46 @@ mergePattern scMap (PatScDefn name defns) = -- it would always contain only one 
         update (Just oldDefns) = Just (oldDefns ++ defns)
 
 
---TODO: implement
+transformCase :: CoreProgram -> CoreProgram
+transformCase (dts, scs) = (dts, scs')
+    where
+        scs' = [(ScDefn name args $ transformExpr dts expr) | (ScDefn name args expr) <- scs]
+
+
+transformExpr :: [ProgramElement Name] -> CoreExpr -> CoreExpr
+transformExpr dts (ECase expr alts) =
+    case length alts == 1 of
+        True -> transformCaseProduct dts expr alts
+        False -> transformCaseSum dts expr alts
+transformExpr dts expr = expr
+
+
+transformCaseProduct :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
+--TODO: tempporarily use transformCaseSum, fix later to own implementation
+transformCaseProduct = transformCaseSum
+
+
+transformCaseSum :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
+transformCaseSum dts expr alts = ECaseType typeName lets
+    where
+        lets = [mkLet pattern rhs | (pattern, rhs) <- alts]
+        typeName = getType (fst . head $ alts) dts
+
+        mkLet pattern rhs = ELet False defns rhs
+            where
+                PConstr tag arity vars = pattern
+                defns = [(v, ESelect tag i) | ((PVar v), i) <- zip vars [1..]]
+
+
+--TODO: make one generic function instead of 3 practically identical ones
+getType :: Pattern -> [ProgramElement Name] -> Name
+getType pattern@(PConstr tag arity patterns) (DataType name cs : types) =
+    case findConstr tag cs of
+        Nothing -> getType pattern types
+        Just (t, a) -> name
+getType (PConstr tag arity patterns) [] = error $ "Could not find constructor with tag: " ++ show tag
+
+
 arity :: Int -> [PatProgramElement] -> Int
 arity tag (PatDataType name cs : types) =
     case findConstr tag cs of
@@ -32,7 +71,6 @@ arity tag (PatDataType name cs : types) =
 arity tag [] = error $ "Could not find constructor with tag: " ++ show tag
 
 
---TODO: implement
 constructors :: Int -> [PatProgramElement] -> [Int]
 constructors tag (PatDataType name cs : types) =
     case findConstr tag cs of
@@ -97,10 +135,10 @@ partition f (x : xs) = acc ++ [cur]
 match :: PatTypeScPair -> CoreProgram
 match (dts, scs) = (dts', scs')
     where
-        scs' = List.map mapSc scs
+        scs' = List.map matchSc scs
         dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
 
-        mapSc (PatScDefn name eqs) = ScDefn name vars $ matchEquations dts n vars eqs $ EVar "Nop"
+        matchSc (PatScDefn name eqs) = ScDefn name vars $ matchEquations dts n vars eqs $ EVar "Nop"
             where
                 (patterns, expr) = head eqs
                 n = length patterns
