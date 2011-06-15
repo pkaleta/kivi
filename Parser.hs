@@ -119,14 +119,36 @@ syntax = takeFirstParse . pProgram
         takeFirstParse _ = error "Syntax error: no successful parse found."
 
 
+pPattern :: Parser [Pattern]
+pPattern = pZeroOrMore pPatternExpr
+
+
+pPatternExpr :: Parser Pattern
+pPatternExpr =
+    (pVar `pApply` Var) `pOr`
+    (pNum `pApply` Num) `pOr`
+    pThen mkConstr pConstr (pZeroOrMore pPatternExpr) `pOr`
+    pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
+    where
+        mkConstr (EConstr tag arity) patExprs = Constr tag arity patExprs
+        mkParenExpr _ expr _ = expr
+
+
+pConstr :: Parser CoreExpr
+pConstr = pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}")
+    where
+        mkConstr _ _ constr _ = constr
+        mkTwoNumbers a _ b = EConstr a b
+
+
 pProgram :: Parser CoreProgram
 pProgram = pOneOrMoreWithSep pSc (pLit ";")
 
 
 pSc :: Parser CoreScDefn
-pSc = pThen4 mkSc pVar (pZeroOrMore pVar) (pLit "=") pExpr
+pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc var vars equals expr = (var, vars, expr)
+        mkSc name vars equals expr = (name, vars, expr)
 
 
 pExpr :: Parser CoreExpr
@@ -134,24 +156,22 @@ pExpr =
     pThen4 (mkLetExpr False) (pLit "let") pDefns (pLit "in") pExpr `pOr`
     pThen4 (mkLetExpr True) (pLit "letrec") pDefns (pLit "in") pExpr `pOr`
     pThen4 mkCaseExpr (pLit "case") pExpr (pLit "of") pAlts `pOr`
-    pThen4 mkLambdaExpr (pLit "\\") (pZeroOrMore pVar) (pLit ".") pExpr `pOr`
+    pThen4 mkLambdaExpr (pLit "\\") pPattern (pLit ".") pExpr `pOr`
     pOrExpr `pOr`
     pAtomicExpr
     where
         mkLetExpr rec _ defns _ body = ELet rec defns body
         mkCaseExpr _ expr _ alts = ECase expr alts
-        mkLambdaExpr _ vars _ expr = ELam vars expr
+        mkLambdaExpr _ pattern _ expr = ELam pattern expr
 
 
 pAtomicExpr :: Parser CoreExpr
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
-    pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}") `pOr`
+    pConstr `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
     where
-        mkConstr _ _ constr _ = constr
-        mkTwoNumbers a _ b = EConstr a b
         mkParenExpr _ expr _ = expr
 
 
@@ -170,10 +190,9 @@ pAlts = pOneOrMoreWithSep pAlt (pLit ";")
 
 
 pAlt :: Parser CoreAlt
-pAlt = pThen4 mkAlt (pThen3 mkNum (pLit "<") pNum (pLit ">")) (pZeroOrMore pVar) (pLit "->") pExpr
+pAlt = pThen3 mkAlt pPatternExpr (pLit "->") pExpr
     where
-        mkAlt num vars _ expr = (num, vars, expr)
-        mkNum _ num _ = num
+        mkAlt pattern _ expr = (pattern, expr)
 
 
 assembleOp :: CoreExpr -> PartialExpr -> CoreExpr
@@ -218,7 +237,7 @@ pAddExpr = pThen assembleOp pMultExpr pAddExprC
 
 
 pAddExprC :: Parser PartialExpr
-pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr` 
+pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr`
     (pThen FoundOp (pLit "-") pMultExpr) `pOr`
     (pEmpty NoOp)
 
