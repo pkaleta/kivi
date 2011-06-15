@@ -44,8 +44,8 @@ scc ins outs vs = topSortedSccs
         topSortedSccs = snd $ spanDfs ins (Set.empty, []) topSortedVs
 
 
-analyse :: CoreProgram -> CoreProgram
-analyse scs = [(name, args, analyseExpr expr) | (name, args, expr) <- freeVars scs]
+analyseDeps :: CoreProgram -> CoreProgram
+analyseDeps scs = [(name, args, analyseExpr expr) | (name, args, expr) <- freeVars scs]
 
 
 analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
