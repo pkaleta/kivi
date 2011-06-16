@@ -14,7 +14,7 @@ data Expr a
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
     | Fatbar (Expr a) (Expr a)
-    | ECaseType (Expr a) [(Int, Expr a)]
+    | ECaseType (Expr a) [(Int, [a], Expr a)]
     | ESelect Int Int
     deriving (Show)
 

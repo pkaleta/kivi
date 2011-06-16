@@ -244,8 +244,9 @@ eval2 state =
 select :: Int -> Int -> GmState -> GmState
 select r i state = putStack stack' state
     where
-        NConstr t args = hLookup heap a
-        stack@(a : as) = getStack state
+        stack = getStack state
+        constrAddr = (stack !! i)
+        NConstr t args = hLookup heap constrAddr
         stack' = (args !! i) : stack
         heap = getHeap state
 

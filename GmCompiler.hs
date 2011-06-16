@@ -157,16 +157,17 @@ intOrBool name =
                 False -> error $ "Name: " ++ name ++ " is not a built-in operator"
 
 
-compileD :: GmCompiler -> Assoc Int CoreExpr -> Assoc Name Addr -> Assoc Int GmCode
-compileD comp alts env = [(tag, comp expr env) | (tag, expr) <- alts]
+compileD :: GmCompiler -> [(Int, [Name], CoreExpr)] -> Assoc Name Addr -> Assoc Int GmCode
+compileD comp alts env = [compileA comp alt env | alt <- alts]
 
 
---compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Int, GmCode)
---compileA comp (t, args, expr) env =
---    (t, [Split n] ++ comp expr env' ++ [Slide n])
---    where
---        n = length args
---        env' = zip args [0..] ++ argOffset n env
+compileA :: GmCompiler -> (Int, [Name], CoreExpr) -> Assoc Name Addr -> (Int, GmCode)
+compileA comp (tag, args, expr) env =
+--    (tag, [Split n] ++ comp expr env' ++ [Slide n])
+    (tag, comp expr env)
+    where
+        n = length args
+        env' = zip args [0..] ++ argOffset n env
 
 
 compileC :: GmCompiler

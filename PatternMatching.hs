@@ -45,11 +45,13 @@ transformCaseProduct = transformCaseSum
 transformCaseSum :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
 transformCaseSum dts var alts = ECaseType var lets
     where
-        lets = [(tag, mkLet arity vars rhs) | (PConstr tag arity vars, rhs) <- alts]
+        lets = [(tag, varNames vars, mkLet arity (varNames vars) rhs) | (PConstr tag arity vars, rhs) <- alts]
 
         mkLet arity vars rhs = ELet False defns rhs
             where
-                defns = [(v, ESelect arity i) | ((PVar v), i) <- zip vars [0..]]
+                defns = [(v, ESelect arity i) | (v, i) <- zip vars [0..]]
+
+        varNames vars = [v | (PVar v) <- vars]
 
 
 --TODO: make one generic function instead of 3 practically identical ones
