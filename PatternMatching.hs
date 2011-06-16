@@ -49,7 +49,7 @@ transformCaseSum dts var alts = ECaseType var lets
 
         mkLet arity vars rhs = ELet False defns rhs
             where
-                defns = [(v, ESelect arity i) | ((PVar v), i) <- zip vars [1..]]
+                defns = [(v, ESelect arity i) | ((PVar v), i) <- zip vars [0..]]
 
 
 --TODO: make one generic function instead of 3 practically identical ones
@@ -122,8 +122,8 @@ partition f (x : xs) = acc ++ [cur]
                 False -> (acc ++ [cur], [y])
 
 
-match :: PatTypeScPair -> CoreProgram
-match (dts, scs) = (dts', scs')
+patternMatch :: PatTypeScPair -> CoreProgram
+patternMatch (dts, scs) = (dts', scs')
     where
         scs' = List.map matchSc scs
         dts' = [(DataType name cs) | (PatDataType name cs) <- dts]

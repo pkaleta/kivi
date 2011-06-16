@@ -11,6 +11,7 @@ import GmCompiler
 --import LambdaLifter
 import Text.Regex.Posix
 import Data.List.Utils
+import PatternMatching
 --import DependencyAnalyser
 --import Gc
 
@@ -28,7 +29,7 @@ import Data.List.Utils
 --runD = show . analyseDeps . parse
 
 runTest :: String -> String
-runTest = match . mergePatterns . parse
+runTest = showResults . eval . compile . transformCase . patternMatch . mergePatterns . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
@@ -102,6 +103,7 @@ dispatch (Pushbasic n)  = pushbasic n
 dispatch (MkBool)       = mkbool
 dispatch (MkInt)        = mkint
 dispatch (Get)          = get
+dispatch (Select r i)   = select r i
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -154,7 +156,7 @@ pushglobalPack name state =
             putStack (addr : stack) $ putHeap heap' state
             where
                 (heap', addr) = hAlloc heap $ NGlobal n [Pack t n, Update 0, Unwind]
-                [t, n] = map read $ split "," (name =~ "[0-9]+,[0-9]+" :: String)
+                [t, n] = map read $ Data.List.Utils.split "," (name =~ "[0-9]+,[0-9]+" :: String)
     where
         globals = getGlobals state
         stack = getStack state
@@ -237,6 +239,16 @@ eval2 state =
         code = getCode state
         (a : as) = getStack state
         vstack = getVStack state
+
+
+select :: Int -> Int -> GmState -> GmState
+select r i state = putStack stack' state
+    where
+        NConstr t args = hLookup heap a
+        stack@(a : as) = getStack state
+        stack' = (args !! i) : stack
+        heap = getHeap state
+
 
 add :: GmState -> GmState
 add = arithmetic2 (+)
