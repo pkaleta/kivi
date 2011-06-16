@@ -14,21 +14,21 @@ type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
 
-primitives :: [(Name, [Name], CoreExpr)]
-primitives = [("+", ["x", "y"], EAp (EAp (EVar "+") (EVar "x")) (EVar "y")),
-              ("-", ["x", "y"], EAp (EAp (EVar "-") (EVar "x")) (EVar "y")),
-              ("*", ["x", "y"], EAp (EAp (EVar "*") (EVar "x")) (EVar "y")),
-              ("/", ["x", "y"], EAp (EAp (EVar "/") (EVar "x")) (EVar "y")),
-              ("negate", ["x"], EAp (EVar "negate") (EVar "x")),
-              ("==", ["x", "y"], EAp (EAp (EVar "==") (EVar "x")) (EVar "y")),
-              ("!=", ["x", "y"], EAp (EAp (EVar "!=") (EVar "x")) (EVar "y")),
-              ("<", ["x", "y"], EAp (EAp (EVar "<") (EVar "x")) (EVar "y")),
-              ("<=", ["x", "y"], EAp (EAp (EVar "<=") (EVar "x")) (EVar "y")),
-              (">", ["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")),
-              (">=", ["x", "y"], EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")),
-              ("if", ["c", "t", "f"], EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")),
-              ("True", [], EConstr 2 0),
-              ("False", [], EConstr 1 0)]
+primitiveScs :: [ProgramElement Name]
+primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
+                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
+                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
+                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
+                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
+                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
+                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
+                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
+                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
+                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+                (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
+
+primitiveDataTypes = [(DataType "Bool" [(1, 0), (2, 0)])]
 
 
 builtinDyadicBool :: Assoc Name Instruction
@@ -51,21 +51,39 @@ builtinDyadic :: Assoc Name Instruction
 builtinDyadic = builtinDyadicBool ++ builtinDyadicInt
 
 
-compile :: CoreProgram -> GmState
-compile program = ([], initialCode, [], [], [], heap, globals, initialStats)
+--getCompiledCode :: CoreProgram -> [(Name, GmCode)]
+getCompiledCode program =
+    foldl stringify "" compiled
     where
-        (heap, globals) = buildInitialHeap program
+        state = compile program
+        globals = getGlobals state
+        heap = getHeap state
+        compiled = foldl getCode [] globals
+
+        stringify acc (name, code) =
+            acc ++ show name ++ ": " ++ show code ++ "\n\n"
+
+        getCode acc (name, addr) =
+            (name, code) : acc
+            where
+                (NGlobal arity code) = hLookup heap addr
+
+
+compile :: CoreProgram -> GmState
+compile (dts, scs) = ([], initialCode, [], [], [], heap, globals, initialStats)
+    where
+        (heap, globals) = buildInitialHeap scs
 
 
 initialCode :: GmCode
 initialCode = [Pushglobal "main", Eval, Print]
 
 
-buildInitialHeap :: CoreProgram -> (GmHeap, GmGlobals)
+buildInitialHeap :: [ProgramElement Name] -> (GmHeap, GmGlobals)
 buildInitialHeap program =
     mapAccumL allocateSc hInitial compiled
     where
-        compiled = map compileSc $ preludeDefs ++ program ++ primitives
+        compiled = map compileSc $ preludeDefs ++ program ++ primitiveScs
 
 
 allocateSc :: GmHeap -> GmCompiledSc -> (GmHeap, (Name, Addr))
@@ -74,8 +92,8 @@ allocateSc heap (name, argc, code) = (heap', (name, addr))
         (heap', addr) = hAlloc heap $ NGlobal argc code
 
 
-compileSc :: (Name, [Name], CoreExpr) -> GmCompiledSc
-compileSc (name, args, expr) =
+compileSc :: (ProgramElement Name) -> GmCompiledSc
+compileSc (ScDefn name args expr) =
     (name, n, compileR n expr $ zip args [0..])
     where
         n = length args
@@ -87,7 +105,8 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
     where n = length defs
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
-compileR d (ECase expr alts) env =
+--TODO: change to ECase
+compileR d (ECaseType expr alts) env =
     compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
@@ -114,9 +133,8 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileE defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileE defs body env
-compileE (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD compileE alts env]
---compileE (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
+--compileE (ECase expr alts) env =
+--    compileE expr env ++ [Casejump $ compileD compileE alts env]
 compileE (EAp (EVar "negate") expr) env =
     compileB expr env ++ [MkInt]
 compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
@@ -139,33 +157,34 @@ intOrBool name =
                 False -> error $ "Name: " ++ name ++ " is not a built-in operator"
 
 
-compileD :: GmCompiler -> [CoreAlt] -> Assoc Name Addr -> Assoc Int GmCode
-compileD comp alts env = [compileA comp alt env | alt <- alts]
+compileD :: GmCompiler -> Assoc Int CoreExpr -> Assoc Name Addr -> Assoc Int GmCode
+compileD comp alts env = [(tag, comp expr env) | (tag, expr) <- alts]
 
 
-compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Int, GmCode)
-compileA comp (t, args, expr) env =
-    (t, [Split n] ++ comp expr env' ++ [Slide n])
-    where
-        n = length args
-        env' = zip args [0..] ++ argOffset n env
+--compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Int, GmCode)
+--compileA comp (t, args, expr) env =
+--    (t, [Split n] ++ comp expr env' ++ [Slide n])
+--    where
+--        n = length args
+--        env' = zip args [0..] ++ argOffset n env
 
 
 compileC :: GmCompiler
+compileC (ENum n) env = [Pushint n]
 compileC (EVar v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
 compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
-compileC (ENum n) env = [Pushint n]
 compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
+compileC (ESelect arity i) env = [Select arity i]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
-compileC (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD compileE alts env]
+--compileC (ECase expr alts) env =
+--    compileE expr env ++ [Casejump $ compileD compileE alts env]
 compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
 
 

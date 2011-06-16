@@ -12,9 +12,9 @@ data Expr a
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [Defn a] (Expr a)          -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
-    | ELam [a] (Expr a)               -- lambda abstractions
+    | ELam [a] (Expr a)                     -- lambda abstractions
     | Fatbar (Expr a) (Expr a)
-    | ECaseType Name [Expr a]
+    | ECaseType (Expr a) [(Int, Expr a)]
     | ESelect Int Int
     deriving (Show)
 
@@ -73,6 +73,7 @@ data Instruction = Unwind
                  | Cond GmCode GmCode
                  | Pack Int Int
                  | Casejump [(Int, GmCode)]
+                 | Select Int Int
                  | Split Int
                  | Print
                  | Pushbasic Int

@@ -43,26 +43,16 @@ transformCaseProduct = transformCaseSum
 
 
 transformCaseSum :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
-transformCaseSum dts expr alts = ECaseType typeName lets
+transformCaseSum dts var alts = ECaseType var lets
     where
-        lets = [mkLet pattern rhs | (pattern, rhs) <- alts]
-        typeName = getType (fst . head $ alts) dts
+        lets = [(tag, mkLet arity vars rhs) | (PConstr tag arity vars, rhs) <- alts]
 
-        mkLet pattern rhs = ELet False defns rhs
+        mkLet arity vars rhs = ELet False defns rhs
             where
-                PConstr tag arity vars = pattern
-                defns = [(v, ESelect tag i) | ((PVar v), i) <- zip vars [1..]]
+                defns = [(v, ESelect arity i) | ((PVar v), i) <- zip vars [1..]]
 
 
 --TODO: make one generic function instead of 3 practically identical ones
-getType :: Pattern -> [ProgramElement Name] -> Name
-getType pattern@(PConstr tag arity patterns) (DataType name cs : types) =
-    case findConstr tag cs of
-        Nothing -> getType pattern types
-        Just (t, a) -> name
-getType (PConstr tag arity patterns) [] = error $ "Could not find constructor with tag: " ++ show tag
-
-
 arity :: Int -> [PatProgramElement] -> Int
 arity tag (PatDataType name cs : types) =
     case findConstr tag cs of
