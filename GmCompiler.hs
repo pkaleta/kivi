@@ -51,8 +51,8 @@ builtinDyadic :: Assoc Name Instruction
 builtinDyadic = builtinDyadicBool ++ builtinDyadicInt
 
 
---getCompiledCode :: CoreProgram -> [(Name, GmCode)]
-getCompiledCode program =
+getCompiledCode :: CoreProgram -> String
+getCompiledCode program@(adts, scs) =
     foldl stringify "" compiled
     where
         state = compile program
@@ -60,13 +60,17 @@ getCompiledCode program =
         heap = getHeap state
         compiled = foldl getCode [] globals
 
-        stringify acc (name, code) =
-            acc ++ show name ++ ": " ++ show code ++ "\n\n"
+        stringify acc (name, expr, code) =
+            acc ++ show name ++ ":\n" ++ show expr ++ "\n\n" ++ show code ++ "\n\n"
 
         getCode acc (name, addr) =
-            (name, code) : acc
+            (name, find name scs, code) : acc
             where
                 (NGlobal arity code) = hLookup heap addr
+
+        find n1 (sc@(ScDefn n2 args expr) : rest) | n1 == n2 = sc
+                                                  | otherwise = find n1 rest
+        find n1 [] = ScDefn "xxx" [] (EVar "x")
 
 
 compile :: CoreProgram -> GmState
@@ -107,7 +111,7 @@ compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
 --TODO: change to ECase
 compileR d (ECaseType expr alts) env =
-    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts env]
+    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts $ argOffset 1 env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
 
@@ -133,8 +137,8 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileE defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileE defs body env
---compileE (ECase expr alts) env =
---    compileE expr env ++ [Casejump $ compileD compileE alts env]
+compileE (ECaseType expr alts) env =
+    compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
 compileE (EAp (EVar "negate") expr) env =
     compileB expr env ++ [MkInt]
 compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
@@ -162,9 +166,7 @@ compileD comp alts env = [compileA comp alt env | alt <- alts]
 
 
 compileA :: GmCompiler -> (Int, [Name], CoreExpr) -> Assoc Name Addr -> (Int, GmCode)
-compileA comp (tag, args, expr) env =
---    (tag, [Split n] ++ comp expr env' ++ [Slide n])
-    (tag, comp expr env)
+compileA comp (tag, args, expr) env = (tag, comp expr env)
     where
         n = length args
         env' = zip args [0..] ++ argOffset n env
@@ -174,7 +176,7 @@ compileC :: GmCompiler
 compileC (ENum n) env = [Pushint n]
 compileC (EVar v) env =
     case aHasKey env v of
-        True -> [Push $ aLookup env v $ error "This is not possible"]
+        True -> [trace ("*****************" ++ show env ++ ": " ++ v) Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
 compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
 compileC (EAp e1 e2) env =
@@ -184,8 +186,8 @@ compileC (EAp e1 e2) env =
 compileC (ESelect arity i) env = [Select arity i]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
---compileC (ECase expr alts) env =
---    compileE expr env ++ [Casejump $ compileD compileE alts env]
+compileC (ECaseType expr alts) env =
+    compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
 compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
 
 
