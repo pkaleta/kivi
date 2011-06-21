@@ -60,7 +60,8 @@ pLit s = pSat (== s)
 pVar :: Parser String
 pVar = pSat check
     where
-        check token = not (token `elem` keywords) && (isAlpha $ head token)
+        check token = not (token `elem` keywords) && (isAlpha first) && (isLower first)
+            where first = head token
 --pVar (token : ts) | isAlpha c =
 --    [(token, ts)] where c : cs = token
 --pVar _ = []
