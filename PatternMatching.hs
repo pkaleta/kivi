@@ -9,6 +9,15 @@ import Parser
 import Debug.Trace
 
 
+data PatternClass = Num | Var | Constr
+
+instance Eq PatternClass where
+    Num == Num = True
+    Var == Var = True
+    Constr == Constr = True
+    _ == _ = False
+
+
 mergePatterns :: PatTypeScPair -> PatTypeScPair
 mergePatterns (dts, scs) = (dts, scs')
     where
@@ -30,6 +39,12 @@ transformCase (dts, scs) = (dts, scs')
 
 
 transformExpr :: [ProgramElement Name] -> CoreExpr -> CoreExpr
+transformExpr dts (EAp e1 e2) = EAp (transformExpr dts e1) (transformExpr dts e2)
+transformExpr dts (ELam args expr) = ELam args $ transformExpr dts expr
+transformExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
+    where
+        expr' = transformExpr dts expr
+        defns' = [(var, transformExpr dts expr) | (var, expr) <- defns]
 transformExpr dts (ECase expr alts) =
     case length alts == 1 of
         True -> transformCaseProduct dts expr alts
@@ -43,16 +58,17 @@ transformCaseProduct = transformCaseSum
 
 
 transformCaseSum :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
-transformCaseSum dts var alts = ECaseType var lets
+transformCaseSum dts var alts = ECase var alts'
     where
-        lets = [(tag, varNames vars, mkLet arity (varNames vars) rhs) | (PConstr tag arity vars, rhs) <- alts]
+        alts' = List.map transform alts
 
         mkLet arity vars rhs = ELet False defns rhs'
             where
                 defns = [(v, ESelect arity i) | (v, i) <- zip vars [0..]]
                 rhs' = transformExpr dts rhs
 
-        varNames vars = [v | (PVar v) <- vars]
+        transform (pattern@(PConstr tag arity vars), rhs) = (pattern, mkLet arity [v | (PVar v) <- vars] rhs)
+        transform (pattern, rhs)                          = (pattern, rhs)
 
 
 --TODO: make one generic function instead of 3 practically identical ones
@@ -95,13 +111,15 @@ subst (ECase expr alts) new old = ECase expr' alts'
         alts' = [(pattern, subst rhs new old) | (pattern, rhs) <- alts]
 
 
-isVar :: Equation -> Bool
-isVar (PVar name : ps, expr) = True
-isVar _ = False
+classifyEquation :: Equation -> PatternClass
+classifyEquation (PVar name : ps, expr) = Var
+classifyEquation (PConstr tag arity ps' : ps, expr) = Constr
+classifyEquation (PNum n : ps, expr) = Num
 
 
 isConstr :: Equation -> Bool
-isConstr eq = not $ isVar eq
+isConstr (PConstr tag arity pattern : ps, expr) = True
+isConstr _                                      = False
 
 
 getConstr :: Equation -> Int
@@ -131,7 +149,7 @@ patternMatch (dts, scs) = (dts', scs')
         scs' = List.map matchSc scs
         dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
 
-        matchSc (PatScDefn name eqs) = ScDefn name vars $ matchEquations dts n vars eqs $ EVar "Nop"
+        matchSc (PatScDefn name eqs) = ScDefn name vars $ matchEquations dts n vars eqs PatternMatchError
             where
                 (patterns, expr) = head eqs
                 n = length patterns
@@ -147,7 +165,7 @@ matchExpr dts (ELam pattern expr) = ELam args' expr'
     where
         name = makeName 1
         args' = [name]
-        expr' = matchEquations dts 1 args' [(pattern, expr)] (EVar "Nop")
+        expr' = matchEquations dts 1 args' [(pattern, expr)] PatternMatchError
 --TODO: implement cases other than EVar
 matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
     where
@@ -157,24 +175,33 @@ matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
 
 
 matchEquations :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchEquations dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
 --TODO: get rid of Fatbar
---foldr Fatbar def [matchExpr dts expr | ([], expr) <- eqs]
-matchEquations dts n vs eqs def = foldr (matchVarCon dts n vs) def $ PatternMatching.partition isVar eqs
+matchEquations dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
+--matchEquations dts n [] eqs def = foldr Fatbar def [matchExpr dts expr | ([], expr) <- eqs]
+matchEquations dts n vs eqs def = foldr (matchPatternClass dts n vs) def $ PatternMatching.partition classifyEquation eqs
 
 
-matchVarCon :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchVarCon dts n vars eqs def | isVar $ head eqs = matchVar dts n vars eqs def
-                               | otherwise = matchConstr dts n vars eqs def
+matchPatternClass :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchPatternClass dts n vars eqs def =
+    case classifyEquation $ head eqs of
+        Constr -> matchConstr dts n vars eqs def
+        Var    -> matchVar dts n vars eqs def
+        Num    -> matchNum dts n vars eqs def
 
 
 matchVar :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchVar dts n (var : vars) eqs def = matchEquations dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] $ def
+matchVar dts n (var : vars) eqs def =
+    matchEquations dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
+
+
+matchNum :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchNum dts n vars@(v : vs) eqs def =
+    ECase (EVar v) $ [(numPattern, matchEquations dts n vs [(ps, expr)] def) | (numPattern : ps, expr) <- eqs] ++ [(PDefault, def)]
 
 
 matchConstr :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchConstr dts n vars@(v : vs) eqs def =
-    ECase (EVar v) [matchAlter dts tag n vars (choose tag eqs) def | tag <- tags]
+    ECase (EVar v) [matchConstrAlter dts tag n vars (choose tag eqs) def | tag <- tags]
     where
         -- it's sufficient to take only the head of equations since all of the
         -- constructors in eqs will be constructors of the same type (assuming
@@ -186,11 +213,11 @@ matchConstr dts n vars@(v : vs) eqs def =
         isConstr t _ = False
 
 
-matchAlter :: [PatProgramElement] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
-matchAlter dts tag n (v : vs) eqs def =
+matchConstrAlter :: [PatProgramElement] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
+matchConstrAlter dts tag n (v : vs) eqs def =
     (PConstr tag n' $ List.map PVar vs', matchEquations dts (n' + n) (vs' ++ vs) eqs' def)
     where
         n' = arity tag dts
-        vs' = [makeName (n+i) | i <- [1..n']]
+        vs' = [makeName (n + i) | i <- [1..n']]
         eqs' = [(ps' ++ ps, expr) | ((PConstr tag arity ps' : ps), expr) <- eqs]
 

@@ -14,7 +14,7 @@ data Expr a
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
     | Fatbar (Expr a) (Expr a)
-    | ECaseType (Expr a) [(Int, [a], Expr a)]
+    | PatternMatchError
     | ESelect Int Int
     deriving (Show)
 
@@ -39,6 +39,7 @@ type Name = String
 data Pattern = PNum Int
              | PVar Name
              | PConstr Int Int [Pattern]
+             | PDefault
     deriving (Show)
 
 
@@ -72,8 +73,9 @@ data Instruction = Unwind
                  | Eq | Ne | Lt | Le | Gt | Ge
                  | Cond GmCode GmCode
                  | Pack Int Int
-                 | Casejump [(Int, GmCode)]
+                 | Casejump (Assoc Pattern GmCode)
                  | Select Int Int
+                 | Error
                  | Split Int
                  | Print
                  | Pushbasic Int

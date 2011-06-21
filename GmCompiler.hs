@@ -110,8 +110,8 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
 --TODO: change to ECase
-compileR d (ECaseType expr alts) env =
-    compileE expr env ++ [Casejump $ compileD (compileR $ d) alts $ argOffset 1 env]
+compileR d (ECase expr alts) env =
+    compileE expr env ++ [Casejump $ compileD (compileR $ d + 1) alts $ argOffset 1 env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
 
@@ -137,7 +137,7 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileE defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileE defs body env
-compileE (ECaseType expr alts) env =
+compileE (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
 compileE (EAp (EVar "negate") expr) env =
     compileB expr env ++ [MkInt]
@@ -161,22 +161,23 @@ intOrBool name =
                 False -> error $ "Name: " ++ name ++ " is not a built-in operator"
 
 
-compileD :: GmCompiler -> [(Int, [Name], CoreExpr)] -> Assoc Name Addr -> Assoc Int GmCode
+compileD :: GmCompiler -> [CoreAlt] -> Assoc Name Addr -> Assoc Pattern GmCode
 compileD comp alts env = [compileA comp alt env | alt <- alts]
 
 
-compileA :: GmCompiler -> (Int, [Name], CoreExpr) -> Assoc Name Addr -> (Int, GmCode)
-compileA comp (tag, args, expr) env = (tag, comp expr env)
-    where
-        n = length args
-        env' = zip args [0..] ++ argOffset n env
+compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Pattern, GmCode)
+compileA comp (pattern, expr) env = (pattern, comp expr env)
+-- TODO: shouldn't we use env' here instead of env?
+--    where
+--        n = length args
+--        env' = zip args [0..] ++ argOffset n env
 
 
 compileC :: GmCompiler
 compileC (ENum n) env = [Pushint n]
 compileC (EVar v) env =
     case aHasKey env v of
-        True -> [trace ("*****************" ++ show env ++ ": " ++ v) Push $ aLookup env v $ error "This is not possible"]
+        True -> [Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
 compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
 compileC (EAp e1 e2) env =
@@ -186,8 +187,9 @@ compileC (EAp e1 e2) env =
 compileC (ESelect arity i) env = [Select arity i]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
-compileC (ECaseType expr alts) env =
+compileC (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
+compileC (PatternMatchError) env = [Error]
 compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
 
 
@@ -224,7 +226,7 @@ compileLetrec finalInstrs comp defs body env =
 compileRecDefs :: Int -> [(Name, CoreExpr)] -> GmEnvironment -> GmCode
 compileRecDefs 0 [] env = []
 compileRecDefs n ((name, expr) : defs) env =
-        compileC expr env ++ [Update $ n - 1] ++ compileRecDefs (n - 1) defs env
+    compileC expr env ++ [Update $ n - 1] ++ compileRecDefs (n - 1) defs env
 
 
 argOffset :: Int -> GmEnvironment -> GmEnvironment

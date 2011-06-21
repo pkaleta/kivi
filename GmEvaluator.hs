@@ -94,8 +94,8 @@ dispatch Lt             = lt
 dispatch Le             = le
 dispatch Gt             = gt
 dispatch Ge             = ge
-dispatch (Cond ist isf)   = cond ist isf
-dispatch (Pack t n)   = pack t n
+dispatch (Cond ist isf) = cond ist isf
+dispatch (Pack t n)     = pack t n
 dispatch (Casejump bs)  = casejump bs
 dispatch (Split n)      = split2 n
 dispatch (Print)        = print2
@@ -302,18 +302,28 @@ pack t n state =
         (heap', addr) = hAlloc (getHeap state) (NConstr t $ take n stack)
         stack = getStack state
 
-casejump :: Assoc Int GmCode -> GmState -> GmState
+casejump :: Assoc Pattern GmCode -> GmState -> GmState
 casejump branches state =
-    case aHasKey branches t of
-        True ->
-            putCode (code' ++ code) state
-            where
-                code' = aLookup branches t $ error "Not possible"
-        False ->
-            error "No suitable case branch found"
+    case findMatchingPattern branches node of
+        (Just code') -> putCode (code' ++ code) state
+        Nothing -> error "No suitable case branch found"
     where
+        heap = getHeap state
+        stack = getStack state
+        node = hLookup heap $ head stack
         code = getCode state
-        (NConstr t as) = hLookup (getHeap state) (head $ getStack state)
+
+
+findMatchingPattern :: Assoc Pattern GmCode -> Node -> Maybe GmCode
+findMatchingPattern ((PConstr t1 a1 args1, code) : branches) node@(NConstr t2 args2)
+    | t1 == t2 = Just code
+    | otherwise = findMatchingPattern branches node
+findMatchingPattern ((PNum n1, code) : branches) node@(NNum n2)
+    | n1 == n2 = Just code
+    | otherwise = findMatchingPattern branches node
+findMatchingPattern ((PDefault, code) : branches) node = Just code
+findMatchingPattern branches node = Nothing
+
 
 split2 :: Int -> GmState -> GmState
 split2 n state =
