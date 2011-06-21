@@ -6,6 +6,7 @@ import Lexer
 import Common
 import List
 import Debug.Trace
+import AbstractDataTypes
 
 
 data PartialExpr = NoOp | FoundOp Name (Expr Pattern)
@@ -13,7 +14,7 @@ type Parser a = [Token] -> [(a, [Token])]
 type Equation = ([Pattern], Expr Pattern)
 
 data PatProgramElement = PatScDefn Name [Equation]
-                       | PatDataType Name [Constr]
+                       | PatDataType Name [Constructor]
     deriving (Show)
 
 type PatProgram = [PatProgramElement]
@@ -58,13 +59,22 @@ pLit s = pSat (== s)
 
 
 pVar :: Parser String
-pVar = pSat check
+pVar = pName isLower
+
+
+pConstrName :: Parser String
+pConstrName = pName isUpper
+
+
+pDataTypeName :: Parser String
+pDataTypeName = pName isUpper
+
+
+pName :: (Char -> Bool) -> Parser String
+pName cond = pSat check
     where
-        check token = not (token `elem` keywords) && (isAlpha first) && (isLower first)
+        check token = not (token `elem` keywords) && (isAlpha first) && (cond first)
             where first = head token
---pVar (token : ts) | isAlpha c =
---    [(token, ts)] where c : cs = token
---pVar _ = []
 
 
 pNum :: Parser Int
@@ -145,18 +155,17 @@ pPatternExpr :: Parser Pattern
 pPatternExpr =
     (pVar `pApply` PVar) `pOr`
     (pNum `pApply` PNum) `pOr`
-    pThen mkConstr pConstr (pZeroOrMore pPatternExpr) `pOr`
+    pThen mkConstr pConstrName (pZeroOrMore pPatternExpr) `pOr`
     pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
     where
-        mkConstr (EConstr tag arity) patExprs = PConstr tag arity patExprs
+        mkConstr name patExprs = PConstr name patExprs
         mkParenExpr _ expr _ = expr
 
 
-pConstr :: Parser (Expr Pattern)
-pConstr = pThen4 mkConstr (pLit "Pack") (pLit "{") (pThen3 mkTwoNumbers pNum (pLit ",")  pNum) (pLit "}")
+pConstrDecl :: Parser Constructor
+pConstrDecl = pThen mkConstr pConstrName pNum
     where
-        mkConstr _ _ constr _ = constr
-        mkTwoNumbers a _ b = EConstr a b
+        mkConstr name arity = (name, undefinedTag, arity)
 
 
 pProgram :: Parser PatProgram
@@ -164,11 +173,9 @@ pProgram = pOneOrMoreWithSep (pSc `pOr` pDataType) (pLit ";")
 
 
 pDataType :: Parser PatProgramElement
-pDataType = pThen4 mkDataType (pLit "data") pVar (pLit "=") (pOneOrMoreWithSep pConstr $ pLit "|")
+pDataType = pThen4 mkDataType (pLit "data") pDataTypeName (pLit "=") $ pOneOrMoreWithSep pConstrDecl $ pLit "|"
     where
-        mkDataType _ name _ cs = PatDataType name constructors
-            where
-                constructors = [(t, a) | (EConstr t a) <- cs]
+        mkDataType _ name _ cs = PatDataType name cs
 
 
 pSc :: Parser PatProgramElement
@@ -195,7 +202,7 @@ pAtomicExpr :: Parser (Expr Pattern)
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
-    pConstr `pOr`
+    (pConstrName `pApply` EConstr) `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
     where
         mkParenExpr _ expr _ = expr

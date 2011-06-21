@@ -8,23 +8,22 @@ import Utils
 data Expr a
     = EVar Name                             -- variables
     | ENum Int                              -- numbers
-    | EConstr Int Int                       -- constructor (tag, arity)
+    | EConstr Name                          -- constructor (tag, arity)
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [Defn a] (Expr a)          -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
-    | Fatbar (Expr a) (Expr a)
+--    | Fatbar (Expr a) (Expr a)
     | PatternMatchError
     | ESelect Int Int
     deriving (Show)
 
 
 data ProgramElement a = ScDefn Name [a] (Expr a)
-                      | DataType Name [Constr]
+                      | DataType Name [Constructor]
     deriving (Show)
 
-type Constr = (Int, Int)
-type DataType = (Name, [Constr])
+type Constructor = (Name, Int, Int)
 type CoreExpr = Expr Name
 type IsRec = Bool
 type Alter a = (Pattern, Expr a)
@@ -38,7 +37,7 @@ type Name = String
 
 data Pattern = PNum Int
              | PVar Name
-             | PConstr Int Int [Pattern]
+             | PConstr Name [Pattern]
              | PDefault
     deriving (Show)
 
