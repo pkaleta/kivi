@@ -8,7 +8,8 @@ import Utils
 data Expr a
     = EVar Name                             -- variables
     | ENum Int                              -- numbers
-    | EConstr Name                          -- constructor (tag, arity)
+    | EConstrName Name
+    | EConstr Int Int                       -- constructor (tag, arity)
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [Defn a] (Expr a)          -- let(rec) expressions (is recursive, definitions, body)
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
@@ -37,7 +38,8 @@ type Name = String
 
 data Pattern = PNum Int
              | PVar Name
-             | PConstr Name [Pattern]
+             | PConstrName Name [Pattern]
+             | PConstr Int [Pattern]
              | PDefault
     deriving (Show)
 

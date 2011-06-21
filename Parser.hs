@@ -7,18 +7,7 @@ import Common
 import List
 import Debug.Trace
 import AbstractDataTypes
-
-
-data PartialExpr = NoOp | FoundOp Name (Expr Pattern)
-type Parser a = [Token] -> [(a, [Token])]
-type Equation = ([Pattern], Expr Pattern)
-
-data PatProgramElement = PatScDefn Name [Equation]
-                       | PatDataType Name [Constructor]
-    deriving (Show)
-
-type PatProgram = [PatProgramElement]
-type PatTypeScPair = ([PatProgramElement], [PatProgramElement])
+import ParserTypes
 
 
 isAtomicExpr :: Expr a -> Bool
@@ -158,7 +147,7 @@ pPatternExpr =
     pThen mkConstr pConstrName (pZeroOrMore pPatternExpr) `pOr`
     pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
     where
-        mkConstr name patExprs = PConstr name patExprs
+        mkConstr name patExprs = PConstrName name patExprs
         mkParenExpr _ expr _ = expr
 
 
@@ -202,7 +191,7 @@ pAtomicExpr :: Parser (Expr Pattern)
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
-    (pConstrName `pApply` EConstr) `pOr`
+    (pConstrName `pApply` EConstrName) `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
     where
         mkParenExpr _ expr _ = expr

@@ -28,8 +28,6 @@ primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y
                 (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
                 (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
 
-primitiveDataTypes = [(DataType "Bool" [(1, 0), (2, 0)])]
-
 
 builtinDyadicBool :: Assoc Name Instruction
 builtinDyadicBool = [("==", Eq),
