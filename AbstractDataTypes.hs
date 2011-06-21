@@ -13,13 +13,13 @@ type NameConstrMapping = Map Name (Tag, Int)
 data AExpr = AConstr Name Tag
 
 
-primitiveADTs :: [ProgramElement Name]
-primitiveADTs = [(DataType "Bool" [("True", 0, 0), ("False", 1, 0)]),
-                 (DataType "List" [("Nil", 2, 0), ("Cons", 3, 2)])]
+primitiveADTs :: [PatProgramElement]
+primitiveADTs = [(PatDataType "Bool" [("True", undefinedTag, 0), ("False", undefinedTag, 0)]),
+                 (PatDataType "List" [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)])]
 
 
 initialTag :: Tag
-initialTag = 4
+initialTag = 0
 
 
 undefinedTag :: Tag
@@ -29,7 +29,7 @@ undefinedTag = -1
 tag :: PatTypeScPair -> PatTypeScPair
 tag (adts, scs) = (adts', scs')
     where
-        ((mapping, tag), adts') = mapAccumL tagADT (Map.empty, initialTag) adts
+        ((mapping, tag), adts') = mapAccumL tagADT (Map.empty, initialTag) (adts ++ primitiveADTs)
         scs' = [tagSc mapping sc | sc <- scs]
 
 
@@ -60,7 +60,7 @@ tagPatterns mapping patterns = [tagPattern mapping pattern | pattern <- patterns
 
 tagPattern :: NameConstrMapping -> Pattern -> Pattern
 tagPattern mapping (PConstrName name patterns) =
-    PConstr (getPatternTag mapping name) (tagPatterns mapping patterns)
+    PConstr (getPatternTag mapping name) (getPatternArity mapping name) (tagPatterns mapping patterns)
 tagPattern mapping pattern = pattern
 
 

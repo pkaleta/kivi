@@ -39,7 +39,7 @@ type Name = String
 data Pattern = PNum Int
              | PVar Name
              | PConstrName Name [Pattern]
-             | PConstr Int [Pattern]
+             | PConstr Int Int [Pattern]
              | PDefault
     deriving (Show)
 

@@ -5,7 +5,7 @@ import List
 import Common
 import Utils
 import Data.Map as Map
-import Parser
+import ParserTypes
 import Debug.Trace
 
 
@@ -76,7 +76,7 @@ arity :: Int -> [PatProgramElement] -> Int
 arity tag (PatDataType name cs : types) =
     case findConstr tag cs of
         Nothing -> arity tag types
-        Just (t, a) -> a
+        Just (n, t, a) -> a
 arity tag [] = error $ "Could not find constructor with tag: " ++ show tag
 
 
@@ -84,13 +84,13 @@ constructors :: Int -> [PatProgramElement] -> [Int]
 constructors tag (PatDataType name cs : types) =
     case findConstr tag cs of
         Nothing -> constructors tag types
-        Just (t, a) -> [t | (t, a) <- cs]
+        Just (n, t, a) -> [t | (n, t, a) <- cs]
 constructors tag [] = error $ "Could not find constructor with tag: " ++ show tag
 
 
-findConstr :: Int -> [Constr] -> Maybe Constr
-findConstr tag ((t, a) : cs) | tag == t = Just (t, a)
-                             | otherwise = findConstr tag cs
+findConstr :: Int -> [Constructor] -> Maybe Constructor
+findConstr tag1 ((name, tag2, arity) : cs) | tag1 == tag2 = Just (name, tag2, arity)
+                                           | otherwise = findConstr tag1 cs
 findConstr tag [] = Nothing
 
 
