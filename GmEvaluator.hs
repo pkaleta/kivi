@@ -12,6 +12,7 @@ import GmCompiler
 import Text.Regex.Posix
 import Data.List.Utils
 import PatternMatching
+import AbstractDataTypes
 --import DependencyAnalyser
 --import Gc
 
@@ -29,7 +30,7 @@ import PatternMatching
 --runD = show . analyseDeps . parse
 
 runTest :: String -> String
-runTest = showResults . eval . compile . transformCase . patternMatch . mergePatterns . parse
+runTest = showResults . eval . compile . transformCase . patternMatch . mergePatterns . tag . parse
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
@@ -315,6 +316,9 @@ casejump branches state =
 
 
 findMatchingPattern :: Assoc Pattern GmCode -> Node -> Maybe GmCode
+findMatchingPattern ((PConstr t1 a1 args1, code) : branches) node@(NGlobal arity [Pack t2 a2, _, _])
+    | t1 == t2 && a1 == a2 = Just code
+    | otherwise = findMatchingPattern branches node
 findMatchingPattern ((PConstr t1 a1 args1, code) : branches) node@(NConstr t2 args2)
     | t1 == t2 = Just code
     | otherwise = findMatchingPattern branches node
