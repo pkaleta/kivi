@@ -1,0 +1,4 @@
+length Nil = 0;
+length (Cons x xs) = 1 + (length xs);
+
+main = length (Cons 1 (Cons 2 (Cons 3 Nil)))
