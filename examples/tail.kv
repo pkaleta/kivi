@@ -1,0 +1,4 @@
+tail Nil = 0;
+tail (Cons x xs) = xs;
+
+main = tail (Cons 3 (Cons 2 (Cons 1 (Cons 0 Nil))))
