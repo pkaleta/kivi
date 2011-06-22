@@ -166,12 +166,14 @@ matchExpr dts (ELam pattern expr) = ELam args' expr'
         name = makeName 1
         args' = [name]
         expr' = matchEquations dts 1 args' [(pattern, expr)] PatternMatchError
---TODO: implement cases other than EVar
 matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
     where
         expr' = matchExpr dts expr
-        defns' = [(v, matchExpr dts expr) | (PVar v, rhs) <- defns]
---TODO: what about case?
+        defns' = [(v, matchExpr dts rhs) | (PVar v, rhs) <- defns]
+matchExpr dts (ECase expr alts) = ECase expr' alts'
+    where
+        expr' = matchExpr dts expr
+        alts' = [(pattern, matchExpr dts rhs) | (pattern, rhs) <- alts]
 
 
 matchEquations :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
