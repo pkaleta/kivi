@@ -291,7 +291,7 @@ cond ist isf state =
     where
         (v : vs) = getVStack state
         code' = case v of
-            2 -> ist ++ code
+            0 -> ist ++ code
             1 -> isf ++ code
         code = getCode state
 
@@ -452,7 +452,7 @@ relational2 :: (Int -> Int -> Bool) -> (GmState -> GmState)
 relational2 op = binOp fun
     where
         fun x y = case (op x y) of
-            True -> 2
+            True -> 0
             False -> 1
 
 binOp :: (Int -> Int -> Int) -> GmState -> GmState
