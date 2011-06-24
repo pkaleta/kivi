@@ -67,3 +67,14 @@ bindersOf defns = [name | (name, _) <- defns]
 rhssOf :: [(a, b)] -> [b]
 rhssOf defns = [rhs | (_, rhs) <- defns]
 
+partition :: (Eq b) => (a -> b) -> [a] -> [[a]]
+partition f [] = []
+partition f (x : xs) = acc ++ [cur]
+    where
+        (acc, cur) = foldl partition' ([], [x]) xs
+
+        partition' (acc, cur) y =
+            case f (head cur) == f y of
+                True -> (acc, cur ++ [y])
+                False -> (acc ++ [cur], [y])
+

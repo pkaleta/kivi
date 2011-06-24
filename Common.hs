@@ -16,7 +16,7 @@ data Expr a
     | ELam [a] (Expr a)                     -- lambda abstractions
 --    | Fatbar (Expr a) (Expr a)
     | PatternMatchError
-    | ESelect Int Int
+    | ESelect Int Int Name
     deriving (Show)
 
 

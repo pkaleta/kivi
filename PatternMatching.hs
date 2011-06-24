@@ -64,7 +64,7 @@ transformCaseSum dts var alts = ECase var alts'
 
         mkLet arity vars rhs = ELet False defns rhs'
             where
-                defns = [(v, ESelect arity i) | (v, i) <- zip vars [0..]]
+                defns = [(v, ESelect arity i "x") | (v, i) <- zip vars [0..]]
                 rhs' = transformExpr dts rhs
 
         transform (pattern@(PConstr tag arity vars), rhs) = (pattern, mkLet arity [v | (PVar v) <- vars] rhs)
@@ -131,18 +131,6 @@ makeName :: Int -> Name
 makeName n = "_u" ++ show n
 
 
-partition :: (Eq b) => (a -> b) -> [a] -> [[a]]
-partition f [] = []
-partition f (x : xs) = acc ++ [cur]
-    where
-        (acc, cur) = foldl partition' ([], [x]) xs
-
-        partition' (acc, cur) y =
-            case f (head cur) == f y of
-                True -> (acc, cur ++ [y])
-                False -> (acc ++ [cur], [y])
-
-
 patternMatch :: PatTypeScPair -> CoreProgram
 patternMatch (dts, scs) = (dts', scs')
     where
@@ -160,6 +148,7 @@ matchExpr :: [PatProgramElement] -> Expr Pattern -> CoreExpr
 matchExpr dts (ENum n) = ENum n
 matchExpr dts (EVar v) = EVar v
 matchExpr dts (EConstr t a) = EConstr t a
+matchExpr dts (ESelect arity pos name) = ESelect arity pos name
 matchExpr dts (EAp e1 e2) = EAp (matchExpr dts e1) (matchExpr dts e2)
 matchExpr dts (ELam pattern expr) = ELam args' expr'
     where
@@ -174,13 +163,14 @@ matchExpr dts (ECase expr alts) = ECase expr' alts'
     where
         expr' = matchExpr dts expr
         alts' = [(pattern, matchExpr dts rhs) | (pattern, rhs) <- alts]
+matchExpr dts expr = error $ "matchExpr function was given: " ++ show expr
 
 
 matchEquations :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 --TODO: get rid of Fatbar
 matchEquations dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
 --matchEquations dts n [] eqs def = foldr Fatbar def [matchExpr dts expr | ([], expr) <- eqs]
-matchEquations dts n vs eqs def = foldr (matchPatternClass dts n vs) def $ PatternMatching.partition classifyEquation eqs
+matchEquations dts n vs eqs def = foldr (matchPatternClass dts n vs) def $ Utils.partition classifyEquation eqs
 
 
 matchPatternClass :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr

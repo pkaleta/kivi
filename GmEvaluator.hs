@@ -13,6 +13,7 @@ import Text.Regex.Posix
 import Data.List.Utils
 import PatternMatching
 import AbstractDataTypes
+import LetTransformer
 --import DependencyAnalyser
 --import Gc
 
@@ -30,14 +31,24 @@ import AbstractDataTypes
 --runD = show . analyseDeps . parse
 
 runTest :: String -> String
-runTest = showResults . eval . compile . transformCase . patternMatch . mergePatterns . tag . parse
+runTest = showResults . eval . compile . transformCase . patternMatch . transformLets . mergePatterns . tag . parse
+
+makeStr :: GmHeap -> Node -> String
+makeStr heap (NNum n) = show n
+makeStr heap (NAp a1 a2) = "(" ++ makeStr heap n1 ++ " " ++ makeStr heap n2 ++ ")"
+    where
+        n1 = hLookup heap a1
+        n2 = hLookup heap a2
+makeStr heap (NGlobal addr code) = "<fun " ++ show addr ++ ">"
+makeStr heap (NInd addr) = makeStr heap $ hLookup heap addr
+makeStr heap (NConstr tag as) = "CONSTR " ++ show tag
 
 showResults :: [GmState] -> [Char]
 showResults [] = ""
 showResults (state : states) =
     case length stack > 0 of
         True ->
-            show stats ++ ": " ++ show output ++ "\ncode:" ++ show code ++ "\nstack: " ++ show stack ++ "\nvstack: " ++ show vstack ++ "\n" ++ show topNode ++ "\n\n" ++ showResults states
+            show stats ++ ": " ++ show output ++ "\ncode:" ++ show code ++ "\nstack: " ++ show stack ++ "\nvstack: " ++ show vstack ++ "\n" ++ show topNode ++ " (" ++ makeStr heap topNode ++ ")\n\n" ++ showResults states
             where
                 topNode = (hLookup heap topAddr)
                 topAddr = head $ getStack state
