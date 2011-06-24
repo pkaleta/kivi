@@ -136,6 +136,14 @@ syntax = takeFirstParse . pProgram
         takeFirstParse _ = error "Syntax error: no successful parse found."
 
 
+pList :: Parser (Expr Pattern)
+pList = pThen3 mkList (pLit "[") (pOneOrMoreWithSep pExpr (pLit ",")) (pLit "]")
+    where
+        mkList _ exprs _ = foldr cons (EConstrName "Nil") exprs
+
+        cons expr list = EAp (EAp (EConstrName "Cons") expr) list
+
+
 pPattern :: Parser [Pattern]
 pPattern = pZeroOrMore pPatternExpr
 
@@ -192,7 +200,8 @@ pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
     (pConstrName `pApply` EConstrName) `pOr`
-    pThen3 mkParenExpr (pLit "(") pExpr (pLit ")")
+    pThen3 mkParenExpr (pLit "(") pExpr (pLit ")") `pOr`
+    pList
     where
         mkParenExpr _ expr _ = expr
 
