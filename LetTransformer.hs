@@ -6,10 +6,6 @@ import Common
 import List
 
 
-transform :: PatTypeScPair -> PatTypeScPair
-transform = transformLets . splitLets
-
-
 -- generic program traversal function
 traverse :: (Expr Pattern -> Expr Pattern) -> PatTypeScPair -> PatTypeScPair
 traverse transformFunction (adts, scs) = (adts, scs')
@@ -24,24 +20,6 @@ traverseEq :: (Expr Pattern -> Expr Pattern) -> Equation -> Equation
 traverseEq transformFunction (patterns, expr) = (patterns, transformFunction expr)
 
 
-splitLets :: PatTypeScPair -> PatTypeScPair
-splitLets = traverse splitExpr
-
-
-splitExpr :: Expr Pattern -> Expr Pattern
-splitExpr (EAp e1 e2) = EAp (splitExpr e1) (splitExpr e2)
-splitExpr (ELam args expr) = ELam args $ splitExpr expr
-splitExpr (ECase expr alts) = ECase expr' alts'
-    where
-        expr' = splitExpr expr
-        alts' = [(pattern, splitExpr expr) | (pattern, expr) <- alts]
-splitExpr (ELet False defns expr) = foldr mkLet expr defns
-    where
-        mkLet defn letExpr = ELet False [defn] letExpr
-splitExpr letExpr@(ELet True defns expr) = letExpr
-splitExpr expr = expr
-
-
 transformLets :: PatTypeScPair -> PatTypeScPair
 transformLets = traverse transformExpr
 
@@ -54,8 +32,8 @@ transformExpr (ECase expr alts) = ECase expr' alts'
         expr' = transformExpr expr
         alts' = [(pattern, transformExpr expr) | (pattern, expr) <- alts]
 transformExpr (ELet False defns expr) =
---    irrefutableLetToSimpleLet $ conformalityTransform letExpr
-    irrefutableLetToSimpleLet letExpr
+--    irrefutableToSimpleLet $ conformalityTransform letExpr
+    irrefutableToSimpleLet letExpr
     where
         letExpr = ELet False defns $ transformExpr expr
 --TODO: implement
@@ -88,8 +66,14 @@ createLet (pattern@(PConstr tag arity args), rhs) expr =
         isVar _               = False
 
 
-irrefutableLetToSimpleLet :: Expr Pattern -> Expr Pattern
-irrefutableLetToSimpleLet (ELet False [patRhs@(pattern, rhs)] expr) = createLet patRhs expr
-irrefutableLetToSimpleLet expr =
+irrefutableToSimpleLet :: Expr Pattern -> Expr Pattern
+irrefutableToSimpleLet (ELet False defns expr) = foldr createLet expr defns
+irrefutableToSimpleLet expr =
     error $ "Trying to apply transformation for irrefutable lets into simple lets for: " ++ show expr
+
+
+--irrefutableToSimpleLetrec :: Expr Pattern -> Expr Pattern
+--irrefutableToSimpleLetrec (ELet True [])
+--irrefutableToSimpleLetrec expr =
+--    error $ "Trying to apply transformation for irrefutable letrecs into simple letrecs for: " ++ show expr
 
