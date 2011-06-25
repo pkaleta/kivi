@@ -69,9 +69,9 @@ createLetrec defns (pattern@(PVar v), rhs) = (pattern, transformExpr rhs) : defn
 createLetrec defns (pattern@(PConstr tag arity args), rhs) =
     defns ++ [(PVar "v", transformExpr rhs)] ++ (foldl (collectDefs "v" arity) [] $ zip args [0..])
     where
-        collectDefs name arity acc ((PVar v), i) = (PVar v, ESelect arity i name) : acc
+        collectDefs name arity acc ((PVar v), i) = acc ++ [(PVar v, ESelect arity i name)]
         collectDefs name arity acc ((PConstr t a as), i) =
-            foldl (collectDefs "w" a) ((PVar "w", ESelect arity i name) : acc) (zip as [0..])
+            foldl (collectDefs "w" a) (acc ++ [(PVar "w", ESelect arity i name)]) (zip as [0..])
 
 
 irrefutableToSimple :: Expr Pattern -> Expr Pattern

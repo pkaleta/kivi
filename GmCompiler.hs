@@ -216,7 +216,7 @@ compileArgs defs env =
 
 compileLetrec :: [Instruction] -> GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
 compileLetrec finalInstrs comp defs body env =
-    [Alloc n] ++ compileRecDefs n defs env' ++ comp body env' ++ finalInstrs
+    trace ("################" ++ show env') [Alloc n] ++ compileRecDefs n defs env' ++ comp body env' ++ finalInstrs
     where
         n = length defs
         env' = compileArgs defs env
