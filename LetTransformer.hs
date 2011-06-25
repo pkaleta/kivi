@@ -4,6 +4,7 @@ module LetTransformer where
 import ParserTypes
 import Common
 import List
+import NameSupply
 
 
 -- generic program traversal function
@@ -64,21 +65,26 @@ createLet (pattern@(PConstr tag arity args), rhs) expr =
         isVar _               = False
 
 
-createLetrec :: [(Pattern, Expr Pattern)] -> (Pattern, Expr Pattern) -> [(Pattern, Expr Pattern)]
-createLetrec defns (pattern@(PVar v), rhs) = (pattern, transformExpr rhs) : defns
-createLetrec defns (pattern@(PConstr tag arity args), rhs) =
-    defns ++ [(PVar "v", transformExpr rhs)] ++ (foldl (collectDefs "v" arity) [] $ zip args [0..])
+createLetrec :: NameSupply -> [(Pattern, Expr Pattern)] -> (Pattern, Expr Pattern) -> [(Pattern, Expr Pattern)]
+createLetrec ns defns (pattern@(PVar v), rhs) = (pattern, transformExpr rhs) : defns
+createLetrec ns defns (pattern@(PConstr tag arity args), rhs) =
+    defns ++ [(PVar varName, transformExpr rhs)] ++ (foldl (collectDefs ns' varName arity) [] $ zip args [0..])
     where
-        collectDefs name arity acc ((PVar v), i) = acc ++ [(PVar v, ESelect arity i name)]
-        collectDefs name arity acc ((PConstr t a as), i) =
-            foldl (collectDefs "w" a) (acc ++ [(PVar "w", ESelect arity i name)]) (zip as [0..])
+        (ns', varName) = getName ns "v"
+
+collectDefs :: NameSupply -> Name -> Int -> [Defn Pattern] -> (Pattern, Int) -> [Defn Pattern]
+collectDefs ns name arity acc ((PVar v), i) = acc ++ [(PVar v, ESelect arity i name)]
+collectDefs ns name arity acc ((PConstr t a as), i) =
+    foldl (collectDefs ns' name' a) (acc ++ [(PVar name', ESelect arity i name)]) (zip as [0..])
+    where
+        (ns', name') = getName ns "v"
 
 
 irrefutableToSimple :: Expr Pattern -> Expr Pattern
 irrefutableToSimple (ELet False defns expr) = foldr createLet expr defns
 irrefutableToSimple (ELet True defns expr) = ELet True defns' expr
     where
-        defns' = foldl createLetrec [] defns
+        defns' = foldl (createLetrec initialNameSupply) [] defns
 irrefutableToSimple expr =
     error $ "Trying to apply transformation for irrefutable let(rec)s into simple let(rec)s for: " ++ show expr
 

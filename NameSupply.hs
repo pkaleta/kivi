@@ -14,3 +14,4 @@ getNames ns ps = (ns + length ps, zipWith makeName [ns..] ps)
 
 makeName :: NameSupply -> [Char] -> [Char]
 makeName ns prefix = prefix ++ (show ns)
+
