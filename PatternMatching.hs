@@ -47,8 +47,10 @@ transformExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
         defns' = [(var, transformExpr dts expr) | (var, expr) <- defns]
 transformExpr dts (ECase expr alts) =
     case length alts == 1 of
-        True -> transformCaseProduct dts expr alts
-        False -> transformCaseSum dts expr alts
+        True -> transformCaseProduct dts expr' alts
+        False -> transformCaseSum dts expr' alts
+    where
+        expr' = transformExpr dts expr
 transformExpr dts expr = expr
 
 
@@ -58,17 +60,20 @@ transformCaseProduct = transformCaseSum
 
 
 transformCaseSum :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
-transformCaseSum dts var alts = ECase var alts'
+transformCaseSum dts expr@(EVar name) alts = ECase expr alts'
     where
         alts' = List.map transform alts
 
         mkLet arity vars rhs = ELet False defns rhs'
             where
-                defns = [(v, ESelect arity i "x") | (v, i) <- zip vars [0..]]
+                defns = [(v, ESelect arity i name) | (v, i) <- zip vars [0..]]
                 rhs' = transformExpr dts rhs
 
-        transform (pattern@(PConstr tag arity vars), rhs) = (pattern, mkLet arity [v | (PVar v) <- vars] rhs)
-        transform (pattern, rhs)                          = (pattern, rhs)
+        transform (pattern@(PConstr tag arity vars), rhs) =
+            case length vars == 0 of
+                True -> (pattern, rhs)
+                False -> (pattern, mkLet arity [v | (PVar v) <- vars] rhs)
+        transform (pattern, rhs) = (pattern, rhs)
 
 
 --TODO: make one generic function instead of 3 practically identical ones

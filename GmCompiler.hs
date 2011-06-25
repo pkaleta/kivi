@@ -182,7 +182,8 @@ compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
-compileC (ESelect arity i v) env = [Eval, Select arity i]
+compileC (ESelect arity i v) env =
+    trace ("************* " ++ show v ++ show env) [Push $ aLookup env v $ error "dupa", Eval, Select arity i]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
 compileC (ECase expr alts) env =

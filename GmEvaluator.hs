@@ -40,7 +40,10 @@ makeStr heap (NAp a1 a2) = "(" ++ makeStr heap n1 ++ " " ++ makeStr heap n2 ++ "
         n1 = hLookup heap a1
         n2 = hLookup heap a2
 makeStr heap (NGlobal addr code) = "<fun " ++ show addr ++ ">"
-makeStr heap (NInd addr) = makeStr heap $ hLookup heap addr
+makeStr heap (NInd addr) =
+    case addr == hNull of
+        True -> "NULL"
+        False -> makeStr heap $ hLookup heap addr
 makeStr heap (NConstr tag as) = "CONSTR " ++ show tag
 
 showResults :: [GmState] -> [Char]
@@ -256,10 +259,9 @@ eval2 state =
 select :: Int -> Int -> GmState -> GmState
 select r i state = putStack stack' state
     where
-        stack = getStack state
-        constrAddr = (stack !! i)
-        NConstr t args = hLookup heap constrAddr
-        stack' = (args !! i) : stack
+        (a : as) = getStack state
+        NConstr t args = hLookup heap a
+        stack' = (args !! i) : as
         heap = getHeap state
 
 

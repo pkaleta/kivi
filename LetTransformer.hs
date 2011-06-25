@@ -31,13 +31,11 @@ transformExpr (ECase expr alts) = ECase expr' alts'
     where
         expr' = transformExpr expr
         alts' = [(pattern, transformExpr expr) | (pattern, expr) <- alts]
-transformExpr (ELet False defns expr) =
+transformExpr (ELet isRec defns expr) =
 --    irrefutableToSimpleLet $ conformalityTransform letExpr
-    irrefutableToSimpleLet letExpr
+    irrefutableToSimple letExpr
     where
-        letExpr = ELet False defns $ transformExpr expr
---TODO: implement
---transformExpr (ELet False defns expr) =
+        letExpr = ELet isRec defns $ transformExpr expr
 transformExpr expr = expr
 
 
@@ -56,7 +54,7 @@ createLet (pattern@(PConstr tag arity args), rhs) expr =
         mkLet patterns letExpr =
             case head patterns of
                 (PVar v, pos) ->
-                    ELet False [(PVar v, ESelect arity pos v) | (PVar v, pos) <- patterns] letExpr
+                    ELet False [(PVar v, ESelect arity pos "v") | (PVar v, pos) <- patterns] letExpr
                 (PConstr t a ps, pos) ->
                     ELet False [(PVar "w", ESelect arity pos "v")] $ foldr createLet letExpr [(pattern, ESelect a i "w") | (pattern, i) <- zip ps [0..]]
 
@@ -66,14 +64,21 @@ createLet (pattern@(PConstr tag arity args), rhs) expr =
         isVar _               = False
 
 
-irrefutableToSimpleLet :: Expr Pattern -> Expr Pattern
-irrefutableToSimpleLet (ELet False defns expr) = foldr createLet expr defns
-irrefutableToSimpleLet expr =
-    error $ "Trying to apply transformation for irrefutable lets into simple lets for: " ++ show expr
+createLetrec :: [(Pattern, Expr Pattern)] -> (Pattern, Expr Pattern) -> [(Pattern, Expr Pattern)]
+createLetrec defns (pattern@(PVar v), rhs) = (pattern, transformExpr rhs) : defns
+createLetrec defns (pattern@(PConstr tag arity args), rhs) =
+    defns ++ [(PVar "v", transformExpr rhs)] ++ (foldl (collectDefs "v" arity) [] $ zip args [0..])
+    where
+        collectDefs name arity acc ((PVar v), i) = (PVar v, ESelect arity i name) : acc
+        collectDefs name arity acc ((PConstr t a as), i) =
+            foldl (collectDefs "w" a) ((PVar "w", ESelect arity i name) : acc) (zip as [0..])
 
 
---irrefutableToSimpleLetrec :: Expr Pattern -> Expr Pattern
---irrefutableToSimpleLetrec (ELet True [])
---irrefutableToSimpleLetrec expr =
---    error $ "Trying to apply transformation for irrefutable letrecs into simple letrecs for: " ++ show expr
+irrefutableToSimple :: Expr Pattern -> Expr Pattern
+irrefutableToSimple (ELet False defns expr) = foldr createLet expr defns
+irrefutableToSimple (ELet True defns expr) = ELet True defns' expr
+    where
+        defns' = foldl createLetrec [] defns
+irrefutableToSimple expr =
+    error $ "Trying to apply transformation for irrefutable let(rec)s into simple let(rec)s for: " ++ show expr
 
