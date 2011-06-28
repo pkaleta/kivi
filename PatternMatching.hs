@@ -143,39 +143,39 @@ patternMatch (dts, scs) = (dts', scs')
         dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
 
 matchSc :: [PatProgramElement] -> PatProgramElement -> ProgramElement Name
-matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n vars eqs $ EError "No matching pattern found"
+matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n vars eqs def
     where
         (patterns, expr) = head eqs
         n = length patterns
         (ns', vars) = getNames initialNameSupply ["_u" | i <- [1..n]]
+        def = EError "No matching pattern found"
 
 
-matchExpr :: [PatProgramElement] -> Expr Pattern -> CoreExpr
-matchExpr dts (ENum n) = ENum n
-matchExpr dts (EVar v) = EVar v
-matchExpr dts (EConstr t a) = EConstr t a
-matchExpr dts (ESelect arity pos name) = ESelect arity pos name
-matchExpr dts (EAp e1 e2) = EAp (matchExpr dts e1) (matchExpr dts e2)
-matchExpr dts (ELam pattern expr) = ELam args' expr'
+matchExpr :: [PatProgramElement] -> Expr Pattern -> CoreExpr -> CoreExpr
+matchExpr dts (ENum n) def = ENum n
+matchExpr dts (EVar v) def = EVar v
+matchExpr dts (EConstr t a) def = EConstr t a
+matchExpr dts (ESelect arity pos name) def = ESelect arity pos name
+matchExpr dts (EAp e1 e2) def = EAp (matchExpr dts e1 def) (matchExpr dts e2 def)
+matchExpr dts (ELam pattern expr) def = ELam args' expr'
     where
         (ns', name) = getName initialNameSupply "_u"
         args' = [name]
-        expr' = matchEquations ns' dts 1 args' [(pattern, expr)] $ EError "No matching pattern found"
-matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
+        expr' = matchEquations ns' dts 1 args' [(pattern, expr)] def
+matchExpr dts (ELet isRec defns expr) def = ELet isRec defns' expr'
     where
-        expr' = matchExpr dts expr
-        defns' = [(v, matchExpr dts rhs) | (PVar v, rhs) <- defns]
-matchExpr dts (ECase expr alts) = ECase expr' alts'
+        expr' = matchExpr dts expr def
+        defns' = [(v, matchExpr dts rhs def) | (PVar v, rhs) <- defns]
+matchExpr dts (ECase expr alts) def = ECase expr' alts'
     where
-        expr' = matchExpr dts expr
-        alts' = [(pattern, matchExpr dts rhs) | (pattern, rhs) <- alts]
-matchExpr dts expr = error $ "matchExpr function was given: " ++ show expr
+        expr' = matchExpr dts expr def
+        alts' = [(pattern, matchExpr dts rhs def) | (pattern, rhs) <- alts] ++ [(PDefault, def)]
 
 
 matchEquations :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchEquations ns dts n [] eqs def =
     case eqs of
-        ((pattern, expr) : eqs') -> matchExpr dts expr
+        ((pattern, expr) : eqs') -> matchExpr dts expr def
         _ -> def
 matchEquations ns dts n vs eqs def = foldr (matchPatternClass ns dts n vs) def $ Utils.partition classifyEquation eqs
 
