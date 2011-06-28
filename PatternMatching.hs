@@ -143,7 +143,7 @@ patternMatch (dts, scs) = (dts', scs')
         dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
 
 matchSc :: [PatProgramElement] -> PatProgramElement -> ProgramElement Name
-matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n vars eqs PatternMatchError
+matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n vars eqs $ EError "No matching pattern found"
     where
         (patterns, expr) = head eqs
         n = length patterns
@@ -160,7 +160,7 @@ matchExpr dts (ELam pattern expr) = ELam args' expr'
     where
         (ns', name) = getName initialNameSupply "_u"
         args' = [name]
-        expr' = matchEquations ns' dts 1 args' [(pattern, expr)] PatternMatchError
+        expr' = matchEquations ns' dts 1 args' [(pattern, expr)] $ EError "No matching pattern found"
 matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
     where
         expr' = matchExpr dts expr
@@ -173,9 +173,10 @@ matchExpr dts expr = error $ "matchExpr function was given: " ++ show expr
 
 
 matchEquations :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
---TODO: get rid of Fatbar
-matchEquations ns dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
---matchEquations dts n [] eqs def = foldr Fatbar def [matchExpr dts expr | ([], expr) <- eqs]
+matchEquations ns dts n [] eqs def =
+    case eqs of
+        ((pattern, expr) : eqs') -> matchExpr dts expr
+        _ -> def
 matchEquations ns dts n vs eqs def = foldr (matchPatternClass ns dts n vs) def $ Utils.partition classifyEquation eqs
 
 

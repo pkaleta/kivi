@@ -188,7 +188,7 @@ compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
 compileC (ECase expr alts) env =
     compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
-compileC (PatternMatchError) env = [Error]
+compileC (EError msg) env = [Error msg]
 compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
 
 

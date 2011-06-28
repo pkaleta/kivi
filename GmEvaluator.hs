@@ -119,6 +119,7 @@ dispatch (MkBool)       = mkbool
 dispatch (MkInt)        = mkint
 dispatch (Get)          = get
 dispatch (Select r i)   = select r i
+dispatch (Error msg)    = error2 msg
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -265,6 +266,10 @@ select r i state = putStack stack' state
         heap = getHeap state
 
 
+error2 :: String -> GmState -> GmState
+error2 = error
+
+
 add :: GmState -> GmState
 add = arithmetic2 (+)
 
@@ -320,7 +325,7 @@ casejump :: Assoc Pattern GmCode -> GmState -> GmState
 casejump branches state =
     case findMatchingPattern branches node of
         (Just code') -> putCode (code' ++ code) state
-        Nothing -> error "No suitable case branch found"
+        Nothing -> error "No suitable case branch found! This should not happen in a typechecked implementation!"
     where
         heap = getHeap state
         stack = getStack state

@@ -15,7 +15,7 @@ data Expr a
     | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
     | ELam [a] (Expr a)                     -- lambda abstractions
 --    | Fatbar (Expr a) (Expr a)
-    | PatternMatchError
+    | EError String
     | ESelect Int Int Name
     deriving (Show)
 
@@ -76,7 +76,7 @@ data Instruction = Unwind
                  | Pack Int Int
                  | Casejump (Assoc Pattern GmCode)
                  | Select Int Int
-                 | Error
+                 | Error String
                  | Split Int
                  | Print
                  | Pushbasic Int
