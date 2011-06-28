@@ -14,6 +14,7 @@ import Data.List.Utils
 import PatternMatching
 import AbstractDataTypes
 import LetTransformer
+import CaseTransformer
 --import DependencyAnalyser
 --import Gc
 
