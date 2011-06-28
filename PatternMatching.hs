@@ -7,6 +7,7 @@ import Utils
 import Data.Map as Map
 import ParserTypes
 import Debug.Trace
+import NameSupply as NS
 
 
 data PatternClass = Num | Var | Constr
@@ -47,20 +48,20 @@ transformExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
         defns' = [(var, transformExpr dts expr) | (var, expr) <- defns]
 transformExpr dts (ECase expr alts) =
     case length alts == 1 of
-        True -> transformCaseProduct dts expr' alts
-        False -> transformCaseSum dts expr' alts
+        True -> transformCaseProduct initialNameSupply dts expr' alts
+        False -> transformCaseSum initialNameSupply dts expr' alts
     where
         expr' = transformExpr dts expr
 transformExpr dts expr = expr
 
 
-transformCaseProduct :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
+transformCaseProduct :: NameSupply -> [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
 --TODO: tempporarily use transformCaseSum, fix later to own implementation
 transformCaseProduct = transformCaseSum
 
 
-transformCaseSum :: [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
-transformCaseSum dts expr@(EVar name) alts = ECase expr alts'
+transformCaseSum :: NameSupply -> [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
+transformCaseSum ns dts expr@(EVar name) alts = ECase expr alts'
     where
         alts' = List.map transform alts
 
@@ -74,6 +75,9 @@ transformCaseSum dts expr@(EVar name) alts = ECase expr alts'
                 True -> (pattern, rhs)
                 False -> (pattern, mkLet arity [v | (PVar v) <- vars] rhs)
         transform (pattern, rhs) = (pattern, rhs)
+transformCaseSum ns dts expr alts = ELet False [(name, expr)] (transformCaseSum ns' dts (EVar name) alts)
+    where
+        (ns', name) = getName ns "v"
 
 
 --TODO: make one generic function instead of 3 practically identical ones
@@ -132,21 +136,18 @@ getConstr ((PConstr tag arity ps') : ps, expr) = tag
 getConstr x = error $ show x
 
 
-makeName :: Int -> Name
-makeName n = "_u" ++ show n
-
-
 patternMatch :: PatTypeScPair -> CoreProgram
 patternMatch (dts, scs) = (dts', scs')
     where
-        scs' = List.map matchSc scs
+        scs' = List.map (matchSc dts) scs
         dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
 
-        matchSc (PatScDefn name eqs) = ScDefn name vars $ matchEquations dts n vars eqs PatternMatchError
-            where
-                (patterns, expr) = head eqs
-                n = length patterns
-                vars = List.map makeName [1..n]
+matchSc :: [PatProgramElement] -> PatProgramElement -> ProgramElement Name
+matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n vars eqs PatternMatchError
+    where
+        (patterns, expr) = head eqs
+        n = length patterns
+        (ns', vars) = getNames initialNameSupply ["_u" | i <- [1..n]]
 
 
 matchExpr :: [PatProgramElement] -> Expr Pattern -> CoreExpr
@@ -157,9 +158,9 @@ matchExpr dts (ESelect arity pos name) = ESelect arity pos name
 matchExpr dts (EAp e1 e2) = EAp (matchExpr dts e1) (matchExpr dts e2)
 matchExpr dts (ELam pattern expr) = ELam args' expr'
     where
-        name = makeName 1
+        (ns', name) = getName initialNameSupply "_u"
         args' = [name]
-        expr' = matchEquations dts 1 args' [(pattern, expr)] PatternMatchError
+        expr' = matchEquations ns' dts 1 args' [(pattern, expr)] PatternMatchError
 matchExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
     where
         expr' = matchExpr dts expr
@@ -171,34 +172,34 @@ matchExpr dts (ECase expr alts) = ECase expr' alts'
 matchExpr dts expr = error $ "matchExpr function was given: " ++ show expr
 
 
-matchEquations :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchEquations :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 --TODO: get rid of Fatbar
-matchEquations dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
+matchEquations ns dts n [] eqs def = (matchExpr dts) . snd . head $ eqs
 --matchEquations dts n [] eqs def = foldr Fatbar def [matchExpr dts expr | ([], expr) <- eqs]
-matchEquations dts n vs eqs def = foldr (matchPatternClass dts n vs) def $ Utils.partition classifyEquation eqs
+matchEquations ns dts n vs eqs def = foldr (matchPatternClass ns dts n vs) def $ Utils.partition classifyEquation eqs
 
 
-matchPatternClass :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchPatternClass dts n vars eqs def =
+matchPatternClass :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchPatternClass ns dts n vars eqs def =
     case classifyEquation $ head eqs of
-        Constr -> matchConstr dts n vars eqs def
-        Var    -> matchVar dts n vars eqs def
-        Num    -> matchNum dts n vars eqs def
+        Constr -> matchConstr ns dts n vars eqs def
+        Var    -> matchVar ns dts n vars eqs def
+        Num    -> matchNum ns dts n vars eqs def
 
 
-matchVar :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchVar dts n (var : vars) eqs def =
-    matchEquations dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
+matchVar :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchVar ns dts n (var : vars) eqs def =
+    matchEquations ns dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
 
 
-matchNum :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchNum dts n vars@(v : vs) eqs def =
-    ECase (EVar v) $ [(numPattern, matchEquations dts n vs [(ps, expr)] def) | (numPattern : ps, expr) <- eqs] ++ [(PDefault, def)]
+matchNum :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchNum ns dts n vars@(v : vs) eqs def =
+    ECase (EVar v) $ [(numPattern, matchEquations ns dts n vs [(ps, expr)] def) | (numPattern : ps, expr) <- eqs] ++ [(PDefault, def)]
 
 
-matchConstr :: [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
-matchConstr dts n vars@(v : vs) eqs def =
-    ECase (EVar v) [matchConstrAlter dts tag n vars (choose tag eqs) def | tag <- tags]
+matchConstr :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchConstr ns dts n vars@(v : vs) eqs def =
+    ECase (EVar v) [matchConstrAlter ns dts tag n vars (choose tag eqs) def | tag <- tags]
     where
         -- it's sufficient to take only the head of equations since all of the
         -- constructors in eqs will be constructors of the same type (assuming
@@ -210,11 +211,11 @@ matchConstr dts n vars@(v : vs) eqs def =
         isConstr t _ = False
 
 
-matchConstrAlter :: [PatProgramElement] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
-matchConstrAlter dts tag n (v : vs) eqs def =
-    (PConstr tag n' $ List.map PVar vs', matchEquations dts (n' + n) (vs' ++ vs) eqs' def)
+matchConstrAlter :: NameSupply -> [PatProgramElement] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
+matchConstrAlter ns dts tag n (v : vs) eqs def =
+    (PConstr tag n' $ List.map PVar vs', matchEquations ns' dts (n' + n) (vs' ++ vs) eqs' def)
     where
         n' = arity tag dts
-        vs' = [makeName (n + i) | i <- [1..n']]
+        (ns', vs') = getNames ns ["_u" | i <- [1..n']]
         eqs' = [(ps' ++ ps, expr) | ((PConstr tag arity ps' : ps), expr) <- eqs]
 
