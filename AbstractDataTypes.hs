@@ -10,7 +10,6 @@ import Data.Map as Map
 type Tag = Int
 type Arity = Int
 type NameConstrMapping = Map Name (Tag, Int)
-data AExpr = AConstr Name Tag
 
 
 primitiveADTs :: [PatProgramElement]
@@ -21,6 +20,46 @@ primitiveADTs = [(PatDataType "Bool" [("True", undefinedTag, 0), ("False", undef
                  (PatDataType "Tuple2" [("Tuple2", undefinedTag, 2)]),
                  (PatDataType "Tuple3" [("Tuple3", undefinedTag, 3)]),
                  (PatDataType "Tuple4" [("Tuple4", undefinedTag, 4)])]
+
+
+--TODO: make one generic function instead of 3 practically identical ones
+--TODO: make it use a map instead of proplists of datatypes
+tagFromName :: Name -> [PatProgramElement] -> Tag
+tagFromName name (PatDataType dtname cs : types) =
+    case findConstrByName name cs of
+        Nothing -> tagFromName name types
+        Just (n, t, a) -> t
+tagFromName tag [] = error $ "Could not find constructor with tag: " ++ show tag
+
+
+arity :: Int -> [PatProgramElement] -> Int
+arity tag (PatDataType name cs : types) =
+    case findConstrByTag tag cs of
+        Nothing -> arity tag types
+        Just (n, t, a) -> a
+arity tag [] = error $ "Could not find constructor with tag: " ++ show tag
+
+
+constructors :: Int -> [PatProgramElement] -> [Int]
+constructors tag (PatDataType name cs : types) =
+    case findConstrByTag tag cs of
+        Nothing -> constructors tag types
+        Just (n, t, a) -> [t | (n, t, a) <- cs]
+constructors tag [] = error $ "Could not find constructor with tag: " ++ show tag
+
+
+findConstrByTag :: Int -> [Constructor] -> Maybe Constructor
+findConstrByTag tag ((name, tag', arity) : cs) | tag == tag' = Just (name, tag, arity)
+                                               | otherwise   = findConstrByTag tag cs
+findConstrByTag tag []                                       = Nothing
+
+
+findConstrByName :: Name -> [Constructor] -> Maybe Constructor
+findConstrByName name ((name', tag, arity) : cs) | name == name' = Just (name, tag, arity)
+                                                | otherwise     = findConstrByName name cs
+findConstrByName name []                                        = Nothing
+
+
 
 
 initialTag :: Tag

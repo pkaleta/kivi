@@ -8,6 +8,7 @@ import Data.Map as Map
 import ParserTypes
 import Debug.Trace
 import NameSupply as NS
+import AbstractDataTypes
 
 
 data PatternClass = Num | Var | Constr
@@ -31,29 +32,6 @@ mergePattern scMap (PatScDefn name defns) = -- it would always contain only one 
     where
         update Nothing = Just defns
         update (Just oldDefns) = Just (oldDefns ++ defns)
-
-
---TODO: make one generic function instead of 3 practically identical ones
-arity :: Int -> [PatProgramElement] -> Int
-arity tag (PatDataType name cs : types) =
-    case findConstr tag cs of
-        Nothing -> arity tag types
-        Just (n, t, a) -> a
-arity tag [] = error $ "Could not find constructor with tag: " ++ show tag
-
-
-constructors :: Int -> [PatProgramElement] -> [Int]
-constructors tag (PatDataType name cs : types) =
-    case findConstr tag cs of
-        Nothing -> constructors tag types
-        Just (n, t, a) -> [t | (n, t, a) <- cs]
-constructors tag [] = error $ "Could not find constructor with tag: " ++ show tag
-
-
-findConstr :: Int -> [Constructor] -> Maybe Constructor
-findConstr tag1 ((name, tag2, arity) : cs) | tag1 == tag2 = Just (name, tag2, arity)
-                                           | otherwise = findConstr tag1 cs
-findConstr tag [] = Nothing
 
 
 subst :: Expr Pattern -> Name -> Name -> Expr Pattern
