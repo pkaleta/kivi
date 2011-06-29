@@ -8,14 +8,14 @@ import List
 import Common
 import Debug.Trace
 import GmCompiler
---import LambdaLifter
 import Text.Regex.Posix
 import Data.List.Utils
 import PatternMatching
 import AbstractDataTypes
 import LetTransformer
 import CaseTransformer
---import DependencyAnalyser
+import LambdaLifter
+import DependencyAnalyser
 --import Gc
 
 

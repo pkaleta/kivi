@@ -31,10 +31,10 @@ type Level = Int
 
 
 lambdaLift :: CoreProgram -> CoreProgram
-lambdaLift = collectScs . rename . abstract . freeVars
+lambdaLift (adts, scs) = (adts, collectScs . rename . abstract . freeVars $ scs)
 
 
-freeVars :: CoreProgram -> AnnProgram Name (Set Name)
+freeVars :: [CoreScDefn] -> AnnProgram Name (Set Name)
 freeVars [] = []
 freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (Set.fromList args) expr) : (freeVars scs)
 
@@ -81,7 +81,7 @@ calcFreeVars localVars (EConstr t n) =
     (Set.empty, AConstr t n)
 
 
-abstract :: AnnProgram Name (Set Name) -> CoreProgram
+abstract :: AnnProgram Name (Set Name) -> [CoreScDefn]
 abstract program = [(name, args, abstractExpr expr) | (name, args, expr) <- program]
 
 
@@ -111,7 +111,7 @@ renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
 renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
 
 
-rename :: CoreProgram -> CoreProgram
+rename :: [CoreScDefn] -> [CoreScDefn]
 rename = renameGen newNames
 
 
@@ -182,7 +182,7 @@ renameExpr newNamesFun mapping ns (ECase expr alts) =
 renameExpr newNamesFun mapping ns (EConstr t a) = (ns, EConstr t a)
 
 
-collectScs :: CoreProgram -> CoreProgram
+collectScs :: [CoreScDefn] -> [CoreScDefn]
 collectScs scs = foldl collectSc [] scs
 
 
@@ -211,7 +211,7 @@ collectExpr (ELet isRec defns expr) =
     (defnsScs ++ localScs ++ exprScs, mkELet isRec varDefns expr')
     where
         (defnsScs, defns') = foldl collectDef ([], []) defns
-        (scDefns, varDefns) = partition isSc defns'
+        (scDefns, varDefns) = List.partition isSc defns'
         -- supercombinators declared locally in defns as lambda expressions
         localScs = [(name, args, expr) | (name, ELam args expr) <- scDefns]
         (exprScs, expr') = collectExpr expr
@@ -458,7 +458,7 @@ floatExpr (ELam args expr) =
         args' = [arg | (arg, level) <- args]
         (arg, curLevel) = head args
         (fdBody, expr') = floatExpr expr
-        (innerFds, outerFds) = partition checkLevel fdBody
+        (innerFds, outerFds) = List.partition checkLevel fdBody
 
         -- predicate to partition the definitions based on definition level
         checkLevel (level, isRec, defns) = level >= curLevel
