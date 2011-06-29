@@ -12,36 +12,36 @@ type Arity = Int
 type NameConstrMapping = Map Name (Tag, Int)
 
 
-primitiveADTs :: [PatProgramElement]
-primitiveADTs = [(PatDataType "Bool" [("True", undefinedTag, 0), ("False", undefinedTag, 0)]),
-                 (PatDataType "List" [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)]),
-                 (PatDataType "Tuple0" [("Tuple0", undefinedTag, 0)]),
-                 (PatDataType "Tuple1" [("Tuple1", undefinedTag, 1)]),
-                 (PatDataType "Tuple2" [("Tuple2", undefinedTag, 2)]),
-                 (PatDataType "Tuple3" [("Tuple3", undefinedTag, 3)]),
-                 (PatDataType "Tuple4" [("Tuple4", undefinedTag, 4)])]
+primitiveADTs :: [DataType]
+primitiveADTs = [("Bool", [("True", undefinedTag, 0), ("False", undefinedTag, 0)]),
+                 ("List", [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)]),
+                 ("Tuple0", [("Tuple0", undefinedTag, 0)]),
+                 ("Tuple1", [("Tuple1", undefinedTag, 1)]),
+                 ("Tuple2", [("Tuple2", undefinedTag, 2)]),
+                 ("Tuple3", [("Tuple3", undefinedTag, 3)]),
+                 ("Tuple4", [("Tuple4", undefinedTag, 4)])]
 
 
 --TODO: make one generic function instead of 3 practically identical ones
 --TODO: make it use a map instead of proplists of datatypes
-tagFromName :: Name -> [PatProgramElement] -> Tag
-tagFromName name (PatDataType dtname cs : types) =
+tagFromName :: Name -> [DataType] -> Tag
+tagFromName name ((dtname, cs) : types) =
     case findConstrByName name cs of
         Nothing -> tagFromName name types
         Just (n, t, a) -> t
 tagFromName tag [] = error $ "Could not find constructor with tag: " ++ show tag
 
 
-arity :: Int -> [PatProgramElement] -> Int
-arity tag (PatDataType name cs : types) =
+arity :: Int -> [DataType] -> Int
+arity tag ((name, cs) : types) =
     case findConstrByTag tag cs of
         Nothing -> arity tag types
         Just (n, t, a) -> a
 arity tag [] = error $ "Could not find constructor with tag: " ++ show tag
 
 
-constructors :: Int -> [PatProgramElement] -> [Int]
-constructors tag (PatDataType name cs : types) =
+constructors :: Int -> [DataType] -> [Int]
+constructors tag ((name, cs) : types) =
     case findConstrByTag tag cs of
         Nothing -> constructors tag types
         Just (n, t, a) -> [t | (n, t, a) <- cs]
@@ -70,16 +70,16 @@ undefinedTag :: Tag
 undefinedTag = -1
 
 
-tag :: PatTypeScPair -> PatTypeScPair
+tag :: PatProgram -> PatProgram
 tag (adts, scs) = (adts', scs')
     where
         ((mapping, tag), adts') = mapAccumL tagADT (Map.empty, initialTag) (adts ++ primitiveADTs)
         scs' = [tagSc mapping sc | sc <- scs]
 
 
-tagADT :: (NameConstrMapping, Tag) -> PatProgramElement -> ((NameConstrMapping, Tag), PatProgramElement)
-tagADT (mapping, curTag) (PatDataType dtName cs) =
-    ((mapping', curTag'), PatDataType dtName cs')
+tagADT :: (NameConstrMapping, Tag) -> DataType -> ((NameConstrMapping, Tag), DataType)
+tagADT (mapping, curTag) (dtName, cs) =
+    ((mapping', curTag'), (dtName, cs'))
     where
         ((mapping', curTag'), cs') = mapAccumL collect (mapping, curTag) cs
 
@@ -87,8 +87,8 @@ tagADT (mapping, curTag) (PatDataType dtName cs) =
             ((Map.insert name (curTag, arity) mapping, curTag+1), (name, curTag, arity))
 
 
-tagSc :: NameConstrMapping -> PatProgramElement -> PatProgramElement
-tagSc mapping (PatScDefn name eqs) = PatScDefn name [tagEq mapping eq | eq <- eqs]
+tagSc :: NameConstrMapping -> PatScDefn -> PatScDefn
+tagSc mapping (name, eqs) = (name, [tagEq mapping eq | eq <- eqs])
 
 
 tagEq :: NameConstrMapping -> Equation -> Equation

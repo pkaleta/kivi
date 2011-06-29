@@ -21,21 +21,11 @@ isAtomicExpr _ = False
 keywords = ["data", "let", "letrec", "case", "in", "of", "Pack"]
 
 --parser implementation
-parse :: String -> PatTypeScPair
-parse = split . syntax . clex
-
-
--- splits datatypes and supercombinators
-split :: PatProgram -> PatTypeScPair
-split = partition isDataType
-    where
-        isDataType (PatDataType name constructors) = True
-        isDataType _ = False
+parse :: String -> PatProgram
+parse = syntax . clex
 
 
 -- parser functions
-
-
 pSat :: (String -> Bool) -> Parser String
 pSat pred (t : ts) | pred t = [(t, ts)]
 pSat _ _ = []
@@ -103,6 +93,10 @@ pThen4 combine p1 p2 p3 p4 tokens =
 
 pZeroOrMore :: Parser a -> Parser [a]
 pZeroOrMore parser = (pOneOrMore parser) `pOr` (pEmpty [])
+
+
+pZeroOrMoreWithSep :: Parser a -> Parser b -> Parser [a]
+pZeroOrMoreWithSep parser sepParser = (pOneOrMoreWithSep parser sepParser) `pOr` (pEmpty [])
 
 
 pEmpty :: a -> Parser a
@@ -173,19 +167,21 @@ pConstrDecl = pThen mkConstr pConstrName pNum
 
 
 pProgram :: Parser PatProgram
-pProgram = pOneOrMoreWithSep (pSc `pOr` pDataType) (pLit ";")
+pProgram = pThen mkProgram (pZeroOrMoreWithSep pDataType (pLit ";")) (pOneOrMoreWithSep pSc (pLit ";"))
+    where
+        mkProgram adts scs = (adts, scs)
 
 
-pDataType :: Parser PatProgramElement
+pDataType :: Parser DataType
 pDataType = pThen4 mkDataType (pLit "data") pDataTypeName (pLit "=") $ pOneOrMoreWithSep pConstrDecl $ pLit "|"
     where
-        mkDataType _ name _ cs = PatDataType name cs
+        mkDataType _ name _ cs = (name, cs)
 
 
-pSc :: Parser PatProgramElement
+pSc :: Parser PatScDefn
 pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc name pattern equals expr = PatScDefn name [(pattern, expr)]
+        mkSc name pattern equals expr = (name, [(pattern, expr)])
 
 
 pExpr :: Parser (Expr Pattern)

@@ -9,10 +9,10 @@ import NameSupply
 transformCase :: CoreProgram -> CoreProgram
 transformCase (dts, scs) = (dts, scs')
     where
-        scs' = [(ScDefn name args $ transformExpr dts expr) | (ScDefn name args expr) <- scs]
+        scs' = [(name, args, transformExpr dts expr) | (name, args, expr) <- scs]
 
 
-transformExpr :: [ProgramElement Name] -> CoreExpr -> CoreExpr
+transformExpr :: [DataType] -> CoreExpr -> CoreExpr
 transformExpr dts (EAp e1 e2) = EAp (transformExpr dts e1) (transformExpr dts e2)
 transformExpr dts (ELam args expr) = ELam args $ transformExpr dts expr
 transformExpr dts (ELet isRec defns expr) = ELet isRec defns' expr'
@@ -28,12 +28,12 @@ transformExpr dts (ECase expr alts) =
 transformExpr dts expr = expr
 
 
-transformCaseProduct :: NameSupply -> [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
+transformCaseProduct :: NameSupply -> [DataType] -> CoreExpr -> [CoreAlt] -> CoreExpr
 --TODO: tempporarily use transformCaseSum, fix later to own implementation
 transformCaseProduct = transformCaseSum
 
 
-transformCaseSum :: NameSupply -> [ProgramElement Name] -> CoreExpr -> [CoreAlt] -> CoreExpr
+transformCaseSum :: NameSupply -> [DataType] -> CoreExpr -> [CoreAlt] -> CoreExpr
 transformCaseSum ns dts expr@(EVar name) alts = ECase expr alts'
     where
         alts' = map transform alts

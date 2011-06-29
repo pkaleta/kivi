@@ -20,14 +20,14 @@ instance Eq PatternClass where
     _ == _ = False
 
 
-mergePatterns :: PatTypeScPair -> PatTypeScPair
+mergePatterns :: PatProgram -> PatProgram
 mergePatterns (dts, scs) = (dts, scs')
     where
-        scs' = [PatScDefn name defns | (name, defns) <- Map.toList $ foldl mergePattern Map.empty scs]
+        scs' = [(name, defns) | (name, defns) <- Map.toList $ foldl mergePattern Map.empty scs]
 
 
-mergePattern :: Map Name [Equation] -> PatProgramElement -> Map Name [Equation]
-mergePattern scMap (PatScDefn name defns) = -- it would always contain only one definition
+mergePattern :: Map Name [Equation] -> PatScDefn -> Map Name [Equation]
+mergePattern scMap (name, defns) = -- it would always contain only one definition
     Map.alter update name scMap
     where
         update Nothing = Just defns
@@ -67,14 +67,14 @@ getConstr ((PConstr tag arity ps') : ps, expr) = tag
 getConstr x = error $ show x
 
 
-patternMatch :: PatTypeScPair -> CoreProgram
+patternMatch :: PatProgram -> CoreProgram
 patternMatch (dts, scs) = (dts', scs')
     where
         scs' = List.map (matchSc dts) scs
-        dts' = [(DataType name cs) | (PatDataType name cs) <- dts]
+        dts' = [(name, cs) | (name, cs) <- dts]
 
-matchSc :: [PatProgramElement] -> PatProgramElement -> ProgramElement Name
-matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n vars eqs def
+matchSc :: [DataType] -> PatScDefn -> CoreScDefn
+matchSc dts (name, eqs) = (name, vars, matchEquations ns' dts n vars eqs def)
     where
         (patterns, expr) = head eqs
         n = length patterns
@@ -82,7 +82,7 @@ matchSc dts (PatScDefn name eqs) = ScDefn name vars $ matchEquations ns' dts n v
         def = EError "No matching pattern found"
 
 
-matchExpr :: [PatProgramElement] -> Expr Pattern -> CoreExpr -> CoreExpr
+matchExpr :: [DataType] -> Expr Pattern -> CoreExpr -> CoreExpr
 matchExpr dts (ENum n) def = ENum n
 matchExpr dts (EVar v) def = EVar v
 matchExpr dts (EConstr t a) def = EConstr t a
@@ -103,7 +103,7 @@ matchExpr dts (ECase expr alts) def = ECase expr' alts'
         alts' = [(pattern, matchExpr dts rhs def) | (pattern, rhs) <- alts] ++ [(PDefault, def)]
 
 
-matchEquations :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchEquations :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchEquations ns dts n [] eqs def =
     case eqs of
         ((pattern, expr) : eqs') -> matchExpr dts expr def
@@ -111,7 +111,7 @@ matchEquations ns dts n [] eqs def =
 matchEquations ns dts n vs eqs def = foldr (matchPatternClass ns dts n vs) def $ Utils.partition classifyEquation eqs
 
 
-matchPatternClass :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchPatternClass :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchPatternClass ns dts n vars eqs def =
     case classifyEquation $ head eqs of
         Constr -> matchConstr ns dts n vars eqs def
@@ -119,17 +119,17 @@ matchPatternClass ns dts n vars eqs def =
         Num    -> matchNum ns dts n vars eqs def
 
 
-matchVar :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchVar :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchVar ns dts n (var : vars) eqs def =
     matchEquations ns dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
 
 
-matchNum :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchNum :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchNum ns dts n vars@(v : vs) eqs def =
     ECase (EVar v) $ [(numPattern, matchEquations ns dts n vs [(ps, expr)] def) | (numPattern : ps, expr) <- eqs] ++ [(PDefault, def)]
 
 
-matchConstr :: NameSupply -> [PatProgramElement] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchConstr :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
 matchConstr ns dts n vars@(v : vs) eqs def =
     ECase (EVar v) [matchConstrAlter ns dts tag n vars (choose tag eqs) def | tag <- tags]
     where
@@ -143,7 +143,7 @@ matchConstr ns dts n vars@(v : vs) eqs def =
         isConstr t _ = False
 
 
-matchConstrAlter :: NameSupply -> [PatProgramElement] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
+matchConstrAlter :: NameSupply -> [DataType] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
 matchConstrAlter ns dts tag n (v : vs) eqs def =
     (PConstr tag n' $ List.map PVar vs', matchEquations ns' dts (n' + n) (vs' ++ vs) eqs' def)
     where

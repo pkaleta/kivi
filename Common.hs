@@ -20,17 +20,16 @@ data Expr a
     deriving (Show)
 
 
-data ProgramElement a = ScDefn Name [a] (Expr a)
-                      | DataType Name [Constructor]
-    deriving (Show)
-
+type CoreScDefn = ScDefn Name
+type ScDefn a = (Name, [a], Expr a)
+type DataType = (Name, [Constructor])
 type Constructor = (Name, Int, Int)
 type CoreExpr = Expr Name
 type IsRec = Bool
 type Alter a = (Pattern, Expr a)
 type CoreAlt = Alter Name
-type Program a = ([ProgramElement a], [ProgramElement a])
-type CoreProgram = ([ProgramElement Name], [ProgramElement Name])
+type Program a = ([DataType], [ScDefn a])
+type CoreProgram = ([DataType], [CoreScDefn])
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
 type Name = String
