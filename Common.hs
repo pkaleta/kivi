@@ -12,7 +12,9 @@ data Expr a
     | EConstr Int Int                       -- constructor (tag, arity)
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [Defn a] (Expr a)          -- let(rec) expressions (is recursive, definitions, body)
-    | ECase (Expr a) [Alter a]              -- case expression (expression, alternatives)
+    | ECase (Expr a) [Alter Pattern a]              -- case expression (expression, alternatives)
+    | ECaseSimple (Expr a) [Alter Int a]
+    | ECaseConstr (Expr a) [Alter Int a]
     | ELam [a] (Expr a)                     -- lambda abstractions
 --    | Fatbar (Expr a) (Expr a)
     | EError String
@@ -27,8 +29,8 @@ data ProgramElement a = ScDefn Name [a] (Expr a)
 type Constructor = (Name, Int, Int)
 type CoreExpr = Expr Name
 type IsRec = Bool
-type Alter a = (Pattern, Expr a)
-type CoreAlt = Alter Name
+type Alter b a = (b, Expr a)
+type CoreAlt = Alter Int Name
 type Program a = ([ProgramElement a], [ProgramElement a])
 type CoreProgram = ([ProgramElement Name], [ProgramElement Name])
 type Defn a = (a, Expr a)
@@ -74,7 +76,8 @@ data Instruction = Unwind
                  | Eq | Ne | Lt | Le | Gt | Ge
                  | Cond GmCode GmCode
                  | Pack Int Int
-                 | Casejump (Assoc Pattern GmCode)
+                 | CasejumpSimple (Assoc Int GmCode)
+                 | CasejumpConstr (Assoc Int GmCode)
                  | Select Int Int
                  | Error String
                  | Split Int

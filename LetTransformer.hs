@@ -8,36 +8,20 @@ import NameSupply
 import AbstractDataTypes
 
 
--- generic program traversal function
-traverse :: ([PatProgramElement] -> Expr Pattern -> Expr Pattern) -> PatTypeScPair -> PatTypeScPair
-traverse transformFunction (adts, scs) = (adts, scs')
+
+transformLet :: [PatProgramElement] -> Expr Pattern -> Expr Pattern
+transformLet adts (EAp e1 e2) = EAp (transformLet adts e1) (transformLet adts e2)
+transformLet adts (ELam args expr) = ELam args $ transformLet adts expr
+transformLet adts (ECase expr alts) = ECase expr' alts'
     where
-        scs' = [(PatScDefn name $ traverseEqs (transformFunction adts) eqs) | (PatScDefn name eqs) <- scs]
-
-traverseEqs :: (Expr Pattern -> Expr Pattern) -> [Equation] -> [Equation]
-traverseEqs transformFunction eqs = [traverseEq transformFunction eq | eq <- eqs]
-
-
-traverseEq :: (Expr Pattern -> Expr Pattern) -> Equation -> Equation
-traverseEq transformFunction (patterns, expr) = (patterns, transformFunction expr)
-
-
-transformLets :: PatTypeScPair -> PatTypeScPair
-transformLets = traverse transformExpr
-
-
-transformExpr :: [PatProgramElement] -> Expr Pattern -> Expr Pattern
-transformExpr adts (EAp e1 e2) = EAp (transformExpr adts e1) (transformExpr adts e2)
-transformExpr adts (ELam args expr) = ELam args $ transformExpr adts expr
-transformExpr adts (ECase expr alts) = ECase expr' alts'
+        expr' = transformLet adts expr
+        alts' = [(pattern, transformLet adts expr) | (pattern, expr) <- alts]
+transformLet adts (ELet isRec defns expr) =
+    (irrefutableToSimple adts) . (conformalityTransform adts) $ ELet isRec defns' expr'
     where
-        expr' = transformExpr adts expr
-        alts' = [(pattern, transformExpr adts expr) | (pattern, expr) <- alts]
-transformExpr adts (ELet isRec defns expr) =
-    (irrefutableToSimple adts) . (conformalityTransform adts) $ letExpr
-    where
-        letExpr = ELet isRec defns $ transformExpr adts expr
-transformExpr adts expr = expr
+        expr' = transformLet adts expr
+        defns' = [(pattern, transformLet adts rhs) | (pattern, rhs) <- defns]
+transformLet adts expr = expr
 
 
 isRefutable :: Pattern -> Bool
@@ -93,7 +77,7 @@ getPatternVarNames (PConstr tag arity patterns) = foldl collectVars [] patterns
 
 
 createLet :: [PatProgramElement] -> (Pattern, Expr Pattern) -> Expr Pattern -> Expr Pattern
-createLet adts (pattern@(PVar v), rhs) expr = ELet False [(pattern, transformExpr adts rhs)] expr
+createLet adts (pattern@(PVar v), rhs) expr = ELet False [(pattern, rhs)] expr
 createLet adts (pattern@(PConstr tag arity args), rhs) expr =
     ELet False [(PVar "v", rhs)] $ foldr mkLet expr $ [vars] ++ [[constr] | constr <- constrs]
     where
@@ -115,9 +99,9 @@ createLet adts (pattern@(PConstr tag arity args), rhs) expr =
 
 
 createLetrec :: [PatProgramElement] -> NameSupply -> [(Pattern, Expr Pattern)] -> (Pattern, Expr Pattern) -> [(Pattern, Expr Pattern)]
-createLetrec adts ns defns (pattern@(PVar v), rhs) = (pattern, transformExpr adts rhs) : defns
+createLetrec adts ns defns (pattern@(PVar v), rhs) = (pattern, rhs) : defns
 createLetrec adts ns defns (pattern@(PConstr tag arity args), rhs) =
-    defns ++ [(PVar varName, transformExpr adts rhs)] ++ (foldl (collectDefs ns' varName arity) [] $ zip args [0..])
+    defns ++ [(PVar varName, rhs)] ++ (foldl (collectDefs ns' varName arity) [] $ zip args [0..])
     where
         (ns', varName) = getName ns "v"
 
