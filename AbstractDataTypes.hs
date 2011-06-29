@@ -15,7 +15,12 @@ data AExpr = AConstr Name Tag
 
 primitiveADTs :: [PatProgramElement]
 primitiveADTs = [(PatDataType "Bool" [("True", undefinedTag, 0), ("False", undefinedTag, 0)]),
-                 (PatDataType "List" [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)])]
+                 (PatDataType "List" [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)]),
+                 (PatDataType "Tuple0" [("Tuple0", undefinedTag, 0)]),
+                 (PatDataType "Tuple1" [("Tuple1", undefinedTag, 1)]),
+                 (PatDataType "Tuple2" [("Tuple2", undefinedTag, 2)]),
+                 (PatDataType "Tuple3" [("Tuple3", undefinedTag, 3)]),
+                 (PatDataType "Tuple4" [("Tuple4", undefinedTag, 4)])]
 
 
 initialTag :: Tag

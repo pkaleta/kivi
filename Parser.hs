@@ -144,6 +144,13 @@ pList = pThen3 mkList (pLit "[") (pOneOrMoreWithSep pExpr (pLit ",")) (pLit "]")
         cons expr list = EAp (EAp (EConstrName "Cons") expr) list
 
 
+pTuple :: Parser (Expr Pattern)
+pTuple = pThen3 mkTuple (pLit "(") (pOneOrMoreWithSep pExpr (pLit ",")) (pLit ")")
+    where
+        mkTuple _ exprs _ = foldl EAp (EConstrName name) exprs
+            where name = "Tuple" ++ show (length exprs)
+
+
 pPattern :: Parser [Pattern]
 pPattern = pZeroOrMore pPatternExpr
 
@@ -201,7 +208,8 @@ pAtomicExpr =
     (pNum `pApply` ENum) `pOr`
     (pConstrName `pApply` EConstrName) `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")") `pOr`
-    pList
+    pList `pOr`
+    pTuple
     where
         mkParenExpr _ expr _ = expr
 
