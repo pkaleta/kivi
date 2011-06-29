@@ -98,17 +98,18 @@ createLet adts (pattern@(PConstr tag arity args), rhs) expr =
         isVar _               = False
 
 
-createLetrec :: [PatProgramElement] -> NameSupply -> [(Pattern, Expr Pattern)] -> (Pattern, Expr Pattern) -> [(Pattern, Expr Pattern)]
-createLetrec adts ns defns (pattern@(PVar v), rhs) = (pattern, rhs) : defns
-createLetrec adts ns defns (pattern@(PConstr tag arity args), rhs) =
-    defns ++ [(PVar varName, rhs)] ++ (foldl (collectDefs ns' varName arity) [] $ zip args [0..])
+createLetrec :: [PatProgramElement] -> (NameSupply, [(Pattern, Expr Pattern)]) -> (Pattern, Expr Pattern) -> (NameSupply, [(Pattern, Expr Pattern)])
+createLetrec adts (ns, defns) (pattern@(PVar v), rhs) = (ns, (pattern, rhs) : defns)
+createLetrec adts (ns, defns) (pattern@(PConstr tag arity args), rhs) =
+    (ns2, defns ++ [(PVar varName, rhs)] ++ innerDefns)
     where
-        (ns', varName) = getName ns "v"
+        (ns2, innerDefns) = foldl (collectDefs varName arity) (ns1, []) $ zip args [0..]
+        (ns1, varName) = getName ns "v"
 
-collectDefs :: NameSupply -> Name -> Int -> [Defn Pattern] -> (Pattern, Int) -> [Defn Pattern]
-collectDefs ns name arity acc ((PVar v), i) = acc ++ [(PVar v, ESelect arity i name)]
-collectDefs ns name arity acc ((PConstr t a as), i) =
-    foldl (collectDefs ns' name' a) (acc ++ [(PVar name', ESelect arity i name)]) (zip as [0..])
+collectDefs :: Name -> Int -> (NameSupply, [Defn Pattern]) -> (Pattern, Int) -> (NameSupply, [Defn Pattern])
+collectDefs name arity (ns, acc) ((PVar v), i) = (ns, acc ++ [(PVar v, ESelect arity i name)])
+collectDefs name arity (ns, acc) ((PConstr t a as), i) =
+    foldl (collectDefs name' a) (ns', (acc ++ [(PVar name', ESelect arity i name)])) (zip as [0..])
     where
         (ns', name') = getName ns "v"
 
@@ -117,7 +118,7 @@ irrefutableToSimple :: [PatProgramElement] -> Expr Pattern -> Expr Pattern
 irrefutableToSimple adts (ELet False defns expr) = foldr (createLet adts) expr defns
 irrefutableToSimple adts (ELet True defns expr) = ELet True defns' expr
     where
-        defns' = foldl (createLetrec adts initialNameSupply) [] defns
+        (ns, defns') = foldl (createLetrec adts) (initialNameSupply, []) defns
 irrefutableToSimple adts expr =
     error $ "Trying to apply transformation for irrefutable let(rec)s into simple let(rec)s for: " ++ show expr
 
