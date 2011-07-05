@@ -76,6 +76,7 @@ getPatternVarNames (PConstr tag arity patterns) = foldl collectVars [] patterns
         collectVars vars pattern = vars ++ getPatternVarNames pattern
 
 
+--TODO: use namesupply here too instead of hardcoding variable names
 createLet :: [PatProgramElement] -> (Pattern, Expr Pattern) -> Expr Pattern -> Expr Pattern
 createLet adts (pattern@(PVar v), rhs) expr = ELet False [(pattern, rhs)] expr
 createLet adts (pattern@(PConstr tag arity args), rhs) expr =

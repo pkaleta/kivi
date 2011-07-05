@@ -67,3 +67,4 @@ transformCaseConstr ns dts expr@(EVar name) alts = ECaseConstr expr alts'
                 True -> (tag, rhs)
                 False -> (tag, mkLet arity vars rhs)
         transform (pattern, rhs) = error $ "Unexpected pattern while transforming constructor case expressions: " ++ show pattern
+

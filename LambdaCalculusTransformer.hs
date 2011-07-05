@@ -69,4 +69,5 @@ transformExpr (ECaseConstr expr alts) = ECaseSimple expr' alts'
         expr' = transformExpr expr
         alts' = [(n, transformExpr expr) | (n, expr) <- alts]
 transformExpr (ESelect r i v) = ESelect r i v
+transformExpr (EError msg) = EError msg
 
