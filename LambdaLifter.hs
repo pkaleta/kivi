@@ -66,8 +66,14 @@ calcFreeVars localVars (ELet isRec defns expr) =
         defnsFvs | isRec = Set.difference rhssFvs binders
                  | otherwise = rhssFvs
         bodyFvs = Set.difference (freeVarsOf expr') binders
-calcFreeVars localVars (ECase expr alts) =
-    (fvs, ACase expr' alts')
+calcFreeVars localVars (ECaseSimple expr alts) = calcFreeVarsCase localVars expr alts
+calcFreeVars localVars (ECaseConstr expr alts) = calcFreeVarsCase localVars expr alts
+calcFreeVars localVars (EConstr t n) =
+    (Set.empty, AConstr t n)
+
+
+calcFreeVarsCase :: (Set Name) -> CoreExpr -> [CoreAlt] -> AnnExpr Name (Set Name)
+calcFreeVarsCase localVars expr alts = (fvs, ACase expr' alts')
     where
         expr'@(exprFvs, _) = calcFreeVars localVars expr
         (fvs, alts') = mapAccumL freeVarsAlts exprFvs alts
@@ -77,8 +83,6 @@ calcFreeVars localVars (ECase expr alts) =
             where
                 body'@(bodyFvs, _) = calcFreeVars (Set.union varsSet localVars) body
                 varsSet = Set.fromList vars
-calcFreeVars localVars (EConstr t n) =
-    (Set.empty, AConstr t n)
 
 
 abstract :: AnnProgram Name (Set Name) -> [CoreScDefn]

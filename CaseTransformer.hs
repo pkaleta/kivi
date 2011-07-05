@@ -7,6 +7,10 @@ import NameSupply
 import ParserTypes
 
 
+defaultTag :: Int
+defaultTag = -1
+
+
 transformCase :: [DataType] -> Expr Pattern -> Expr Pattern
 transformCase dts (EAp e1 e2) = EAp (transformCase dts e1) (transformCase dts e2)
 transformCase dts (ELam args expr) = ELam args $ transformCase dts expr
@@ -45,11 +49,20 @@ transformCaseSum ns dts expr alts = ELet False [(PVar name, expr)] (transformCas
 
 
 transformCaseSimple :: NameSupply -> [DataType] -> Expr Pattern -> [Alter Pattern Pattern] -> Expr Pattern
-transformCaseSimple ns dts expr@(EVar name) alts = ECaseSimple expr $ map transformAlt alts
+transformCaseSimple ns dts expr@(EVar name) alts = ECaseSimple expr alts'
     where
-        transformAlt (PNum n, body)   = (n, body)
-        transformAlt (PDefault, body) = (-1, body)
-        transformAlt (pattern, _)     = error $ "Unexpected pattern while transforming simple case expressions: " ++ show pattern
+        alts' = case foldl collectAlt (False, []) alts of
+            (True, elems)  -> elems
+            (False, elems) -> elems ++ [(defaultTag, defExpr)]
+
+        collectAlt oldAcc@(found, acc) (pattern, expr) =
+            case found of
+                True -> oldAcc
+                False -> case pattern of
+                    (PNum n)   -> (False, acc ++ [(n, expr)])
+                    _          -> (True, acc ++ [(defaultTag, expr)])
+
+        defExpr = error $ "No matching pattern found"
 
 
 transformCaseConstr :: NameSupply -> [DataType] -> Expr Pattern -> [Alter Pattern Pattern] -> Expr Pattern

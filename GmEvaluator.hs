@@ -345,7 +345,7 @@ casejump branches state =
 
 
 findMatchingBranch :: Assoc Int GmCode -> Node -> Maybe GmCode
-findMatchingBranch ([(n, code)]) node = Just code
+findMatchingBranch ([(-1, code)]) node = Just code
 findMatchingBranch ((n, code) : bs) node@(NNum n')
     | n == n'   = Just code
     | otherwise = findMatchingBranch bs node
