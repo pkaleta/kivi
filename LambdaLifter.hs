@@ -20,11 +20,13 @@ data AnnExpr' a b = AVar Name
                   | AAp (AnnExpr a b) (AnnExpr a b)
                   | ALet IsRec [AnnDefn a b] (AnnExpr a b)
                   | ACase (AnnExpr a b) [AnnAlt a b]
+                  | ACaseSimple (AnnExpr a b) [AnnAlt a b]
+                  | ACaseConstr (AnnExpr a b) [AnnAlt a b]
                   | ALam [a] (AnnExpr a b)
     deriving Show
 
 type AnnDefn a b = (a, AnnExpr a b)
-type AnnAlt a b = (Int, [a], AnnExpr a b)
+type AnnAlt a b = (Int, AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
 type Level = Int
@@ -66,23 +68,26 @@ calcFreeVars localVars (ELet isRec defns expr) =
         defnsFvs | isRec = Set.difference rhssFvs binders
                  | otherwise = rhssFvs
         bodyFvs = Set.difference (freeVarsOf expr') binders
-calcFreeVars localVars (ECaseSimple expr alts) = calcFreeVarsCase localVars expr alts
-calcFreeVars localVars (ECaseConstr expr alts) = calcFreeVarsCase localVars expr alts
+calcFreeVars localVars (ECaseSimple expr alts) = calcFreeVarsCase ACaseSimple localVars expr alts
+calcFreeVars localVars (ECaseConstr expr alts) = calcFreeVarsCase ACaseConstr localVars expr alts
 calcFreeVars localVars (EConstr t n) =
     (Set.empty, AConstr t n)
 
 
-calcFreeVarsCase :: (Set Name) -> CoreExpr -> [CoreAlt] -> AnnExpr Name (Set Name)
-calcFreeVarsCase localVars expr alts = (fvs, ACase expr' alts')
+calcFreeVarsCase :: ((AnnExpr Name (Set Name)) -> [AnnAlt Name (Set Name)] -> AnnExpr' Name (Set Name))
+                 -> (Set Name)
+                 -> CoreExpr
+                 -> [CoreAlt]
+                 -> AnnExpr Name (Set Name)
+calcFreeVarsCase constr localVars expr alts = (fvs, constr expr' alts')
     where
         expr'@(exprFvs, _) = calcFreeVars localVars expr
         (fvs, alts') = mapAccumL freeVarsAlts exprFvs alts
 
-        freeVarsAlts fvs (t, vars, body) =
-            (Set.union fvs (Set.difference bodyFvs varsSet), (t, vars, body'))
+        freeVarsAlts fvs (t, body) =
+            (Set.union fvs bodyFvs, (t, body'))
             where
-                body'@(bodyFvs, _) = calcFreeVars (Set.union varsSet localVars) body
-                varsSet = Set.fromList vars
+                body'@(bodyFvs, _) = calcFreeVars localVars body
 
 
 abstract :: AnnProgram Name (Set Name) -> [CoreScDefn]
@@ -101,30 +106,27 @@ abstractExpr (freeVars, ALam args expr) =
         freeVarsList = Set.toList freeVars
         sc = ELet False [("sc", scBody)] (EVar "sc")
         scBody = ELam (freeVarsList ++ args) (abstractExpr expr)
-abstractExpr (freeVars, ACase expr alts) =
-    ECase (abstractExpr expr) alts'
-    where
-        alts' = map abstractAlt alts
-        abstractAlt (t, vars, expr) = (t, vars, abstractExpr expr)
+abstractExpr (freeVars, ACaseSimple expr alts) = abstractExprCase ECaseSimple freeVars expr alts
+abstractExpr (freeVars, ACaseConstr expr alts) = abstractExprCase ECaseConstr freeVars expr alts
 abstractExpr (freeVars, AConstr t a) = EConstr t a
 
 
-renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
-          -> Program a
-          -> Program a
-renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
-
-
-rename :: [CoreScDefn] -> [CoreScDefn]
-rename = renameGen newNames
-
-
-newNames :: NameSupply -> [Name] -> (NameSupply, [Name], Map Name Name)
-newNames ns names =
-    (ns', names', mapping)
+abstractExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
+                 -> (Set Name)
+                 -> (AnnExpr Name (Set Name))
+                 -> [(AnnAlt Name (Set Name))]
+                 -> CoreExpr
+abstractExprCase constr freeVars expr alts = constr (abstractExpr expr) alts'
     where
-        (ns', names') = getNames ns names
-        mapping = Map.fromList $ zip names names'
+        alts' = map abstractAlt alts
+
+        abstractAlt (t, expr) = (t, abstractExpr expr)
+
+
+renameGen :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+          -> [ScDefn a]
+          -> [ScDefn a]
+renameGen newNamesFun scs = snd $ mapAccumL (renameSc newNamesFun) initialNameSupply scs
 
 
 renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
@@ -172,18 +174,40 @@ renameExpr newNamesFun mapping ns (ELet isRec defns expr) =
         (ns2, rhss') = mapAccumL (renameExpr newNamesFun exprMapping) ns1 rhss
         (ns3, expr') = renameExpr newNamesFun exprMapping ns2 expr
         defns' = zip binders' rhss'
-renameExpr newNamesFun mapping ns (ECase expr alts) =
-    (ns2, ECase expr' alts')
+renameExpr newNamesFun mapping ns (ECaseSimple expr alts) = renameExprCase ECaseSimple newNamesFun mapping ns expr alts
+renameExpr newNamesFun mapping ns (ECaseConstr expr alts) = renameExprCase ECaseConstr newNamesFun mapping ns expr alts
+renameExpr newNamesFun mapping ns (EConstr t a) = (ns, EConstr t a)
+
+
+renameExprCase :: (Expr a -> [Alter Int a] -> Expr a)
+               -> (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
+               -> Map Name Name
+               -> NameSupply
+               -> Expr a
+               -> [Alter Int a]
+               -> (NameSupply, Expr a)
+renameExprCase constr newNamesFun mapping ns expr alts =
+    (ns2, constr expr' alts')
     where
         (ns1, expr') = renameExpr newNamesFun mapping ns expr
         (ns2, alts') = mapAccumL (renameAlt mapping) ns1 alts
 
-        renameAlt mapping ns (t, vars, body) =
-            (ns2, (t, vars', body'))
+        renameAlt mapping ns (t, body) =
+            (ns', (t, body'))
             where
-                (ns1, vars', mapping') = newNamesFun ns vars
-                (ns2, body') = renameExpr newNamesFun (Map.union mapping' mapping) ns1 body
-renameExpr newNamesFun mapping ns (EConstr t a) = (ns, EConstr t a)
+                (ns', body') = renameExpr newNamesFun mapping ns1 body
+
+
+rename :: [CoreScDefn] -> [CoreScDefn]
+rename = renameGen newNames
+
+
+newNames :: NameSupply -> [Name] -> (NameSupply, [Name], Map Name Name)
+newNames ns names =
+    (ns', names', mapping)
+    where
+        (ns', names') = getNames ns names
+        mapping = Map.fromList $ zip names names'
 
 
 collectScs :: [CoreScDefn] -> [CoreScDefn]
@@ -237,16 +261,24 @@ collectExpr (ELet isRec defns expr) =
             case length varDefns > 0 of
                 True -> ELet isRec varDefns expr
                 False -> expr
-collectExpr (ECase expr alts) =
-    (exprScs ++ altsScs, ECase expr' alts')
+collectExpr (ECaseSimple expr alts) = collectExprCase ECaseSimple expr alts
+collectExpr (ECaseConstr expr alts) = collectExprCase ECaseConstr expr alts
+collectExpr (EConstr t a) = ([], EConstr t a)
+
+
+collectExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
+                -> CoreExpr
+                -> [CoreAlt]
+                -> ([CoreScDefn], CoreExpr)
+collectExprCase constr expr alts =
+    (exprScs ++ altsScs, constr expr' alts')
     where
         (exprScs, expr') = collectExpr expr
         (altsScs, alts') = mapAccumL collectAlt [] alts
 
-        collectAlt scs (t, vars, expr) =
-            (scs ++ exprScs, (t, vars, expr'))
+        collectAlt scs (t, expr) =
+            (scs ++ exprScs, (t, expr'))
             where (exprScs, expr') = collectExpr expr
-collectExpr (EConstr t a) = ([], EConstr t a)
 
 
 freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
@@ -256,10 +288,11 @@ freeVarsOf (fvs, _) = fvs
 ------------------ lazy lambda lifter
 
 lazyLambdaLift :: CoreProgram -> CoreProgram
-lazyLambdaLift = float . mergeLambdas . renameL . identifyMFEs . annotateLevels . separateLambdas
+lazyLambdaLift (adts, scs) =
+    (adts, float . mergeLambdas . renameL . identifyMFEs . annotateLevels . separateLambdas $ scs)
 
 
-separateLambdas :: CoreProgram -> CoreProgram
+separateLambdas :: [CoreScDefn] -> [CoreScDefn]
 separateLambdas [] = []
 separateLambdas ((name, args, expr) : scs) = (name, [], mkSepArgs args $ separateLambdasExpr expr) : separateLambdas scs
 
@@ -269,10 +302,8 @@ separateLambdasExpr (ENum n) = (ENum n)
 separateLambdasExpr (EVar v) = (EVar v)
 separateLambdasExpr (EConstr t a) = (EConstr t a)
 separateLambdasExpr (EAp e1 e2) = EAp (separateLambdasExpr e1) (separateLambdasExpr e2)
-separateLambdasExpr (ECase expr alts) =
-    ECase (separateLambdasExpr expr) $ map mkAlt alts
-    where
-        mkAlt (t, args, expr) = (t, args, separateLambdasExpr expr)
+separateLambdasExpr (ECaseSimple expr alts) = separateLambdasExprCase ECaseSimple expr alts
+separateLambdasExpr (ECaseConstr expr alts) = separateLambdasExprCase ECaseConstr expr alts
 separateLambdasExpr (ELam args body) =
     mkSepArgs args body'
     where body' = separateLambdasExpr body
@@ -282,13 +313,20 @@ separateLambdasExpr (ELet isRec defns body) =
         mkDefn (name, expr) = (name, separateLambdasExpr expr)
 
 
+separateLambdasExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr) -> CoreExpr -> [CoreAlt] -> CoreExpr
+separateLambdasExprCase constr expr alts =
+    constr (separateLambdasExpr expr) $ map mkAlt alts
+    where
+        mkAlt (t, expr) = (t, separateLambdasExpr expr)
+
+
 mkSepArgs :: [Name] -> CoreExpr -> CoreExpr
 mkSepArgs args expr = foldr mkELam expr args
     where
         mkELam arg expr = ELam [arg] expr
 
 
-annotateLevels :: CoreProgram -> AnnProgram (Name, Level) Level
+annotateLevels :: [CoreScDefn] -> AnnProgram (Name, Level) Level
 annotateLevels = freeToLevel . freeVars
 
 
@@ -340,18 +378,29 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
         -- helper function to collect free variables from right had side
         -- expressions in definitions
         collectFreeVars freeVars (free, rhs) = Set.union freeVars free
-freeToLevelExpr level env (free, ACase expr alts) =
-    (freeSetToLevel env free, ACase expr' alts')
+freeToLevelExpr level env (free, ACaseSimple expr alts) =
+    freeToLevelExprCase ACaseSimple level env free expr alts
+freeToLevelExpr level env (free, ACaseConstr expr alts) =
+    freeToLevelExprCase ACaseConstr level env free expr alts
+
+
+freeToLevelExprCase :: ((AnnExpr (Name, Level) Level) -> [AnnAlt (Name, Level) Level] -> (AnnExpr' (Name, Level) Level))
+                    -> Level
+                    -> Map Name Level
+                    -> Set Name
+                    -> AnnExpr Name (Set Name)
+                    -> [AnnAlt Name (Set Name)]
+                    -> AnnExpr (Name, Level) Level
+freeToLevelExprCase constr level env free expr alts =
+    (freeSetToLevel env free, constr expr' alts')
     where
         expr'@(exprLevel, _) = freeToLevelExpr level env expr
         alts' = map mapAlt alts
 
-        mapAlt (tag, args, altExpr) =
-            (tag, args', altExpr')
+        mapAlt (tag, altExpr) =
+            (tag, altExpr')
             where
-                args' = [(arg, exprLevel) | arg <- args]
-                env' = Map.union (Map.fromList args') env
-                altExpr' = freeToLevelExpr level env' altExpr
+                altExpr' = freeToLevelExpr level env altExpr
 
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
@@ -361,7 +410,7 @@ freeSetToLevel env free =
         Nothing -> 0 | var <- (Set.toList free)]
 
 
-identifyMFEs :: AnnProgram (Name, Level) Level -> Program (Name, Level)
+identifyMFEs :: AnnProgram (Name, Level) Level -> [ScDefn (Name, Level)]
 identifyMFEs scs = [(name, [], identifyMFEsExpr 0 expr) | (name, [], expr) <- scs]
 
 
@@ -393,14 +442,24 @@ identifyMFEsExpr1 level (ALet isRec defns expr) =
     where
         defns' = [((name, defnLevel), identifyMFEsExpr defnLevel rhs) | ((name, defnLevel), rhs) <- defns]
         expr' = identifyMFEsExpr level expr
-identifyMFEsExpr1 level (ACase expr@(exprLevel, _) alts) =
-    ECase expr' alts'
+identifyMFEsExpr1 level (ACaseSimple expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseSimple level expr exprLevel alts
+identifyMFEsExpr1 level (ACaseConstr expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseSimple level expr exprLevel alts
+
+
+identifyMFEsExpr1Case :: (Expr (Name, Level) -> [Alter Int (Name, Level)] -> Expr (Name, Level))
+                      -> Level
+                      -> AnnExpr (Name, Level) Level
+                      -> Level
+                      -> [AnnAlt (Name, Level) Level]
+                      -> Expr (Name, Level)
+identifyMFEsExpr1Case constr level expr exprLevel alts =
+    constr expr' alts'
     where
         expr' = identifyMFEsExpr level expr
-        alts' = [(tag, args, identifyMFEsExpr level body) | (tag, args, body@(bodyLevel, _)) <- alts]
+        alts' = [(tag, identifyMFEsExpr level body) | (tag, body@(bodyLevel, _)) <- alts]
 
 
-renameL :: Program (Name, Level) -> Program (Name, Level)
+renameL :: [ScDefn (Name, Level)] -> [ScDefn (Name, Level)]
 renameL = renameGen newNamesL
 
 
@@ -415,7 +474,7 @@ newNamesL ns names =
         mapping = Map.fromList $ zip names0 names1
 
 
-mergeLambdas :: Program (Name, Level) -> Program (Name, Level)
+mergeLambdas :: [ScDefn (Name, Level)] -> [ScDefn (Name, Level)]
 mergeLambdas scs = [(name, args, mergeLambdasExpr expr) | (name, args, expr) <- scs]
 
 
@@ -431,7 +490,7 @@ mergeLambdasExpr (ELam args expr) =
 mergeLambdasExpr expr = expr
 
 
-float :: Program (Name, Level) -> CoreProgram
+float :: [ScDefn (Name, Level)] -> [CoreScDefn]
 float = foldl collectFloatedSc []
 
 
@@ -484,16 +543,23 @@ floatExpr (ELet isRec defns expr) =
             (rhsFds ++ defnsAcc, (name, rhs'))
             where
                 (rhsFds, rhs') = floatExpr rhs
-floatExpr (ECase expr alts) =
-    (exprFds ++ altsFds, ECase expr' alts')
+floatExpr (ECaseSimple expr alts) = floatExprCase ECaseSimple expr alts
+floatExpr (ECaseConstr expr alts) = floatExprCase ECaseConstr expr alts
+
+
+floatExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
+              -> Expr (Name, Level)
+              -> [Alter Int (Name, Level)]
+              -> (FloatedDefns, Expr Name)
+floatExprCase constr expr alts =
+    (exprFds ++ altsFds, constr expr' alts')
     where
         (exprFds, expr') = floatExpr expr
 
         (altsFds, alts') = mapAccumL collectAlts [] alts
 
-        collectAlts altsAcc (tag, args, altExpr) =
-            (altFds ++ altsAcc, (tag, args', altExpr'))
+        collectAlts altsAcc (tag, altExpr) =
+            (altFds ++ altsAcc, (tag, altExpr'))
             where
                 (altFds, altExpr') = floatExpr altExpr
-                args' = map fst args
 

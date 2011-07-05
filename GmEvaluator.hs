@@ -12,8 +12,8 @@ import Text.Regex.Posix
 import Data.List.Utils
 import PatternMatching
 import AbstractDataTypes
---import LambdaLifter
---import DependencyAnalyser
+import LambdaLifter
+import DependencyAnalyser
 import LambdaCalculusTransformer
 --import DependencyAnalyser
 --import Gc
