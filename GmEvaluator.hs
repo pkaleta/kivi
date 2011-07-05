@@ -12,10 +12,10 @@ import Text.Regex.Posix
 import Data.List.Utils
 import PatternMatching
 import AbstractDataTypes
-import LetTransformer
-import CaseTransformer
-import LambdaLifter
-import DependencyAnalyser
+--import LambdaLifter
+--import DependencyAnalyser
+import LambdaCalculusTransformer
+--import DependencyAnalyser
 --import Gc
 
 
@@ -32,7 +32,7 @@ import DependencyAnalyser
 --runD = show . analyseDeps . parse
 
 runTest :: String -> String
-runTest = showResults . eval . compile . transformCase . patternMatch . transformLets . mergePatterns . tag . parse
+runTest = showResults . eval . compile . transformToLambdaCalculus . mergePatterns . tag . parse
 
 makeStr :: GmHeap -> Node -> String
 makeStr heap (NNum n) = show n
@@ -89,38 +89,39 @@ step state =
         (i : is) = getCode state
 
 dispatch :: Instruction -> GmState -> GmState
-dispatch Unwind         = unwind
-dispatch (Pushglobal f) = pushglobal f
-dispatch (Pushint n)    = pushint n
-dispatch (Push n)       = push n
-dispatch Mkap           = mkap
-dispatch (Update n)     = update n
-dispatch (Pop n)        = pop n
-dispatch (Slide n)      = slide n
-dispatch (Alloc n)      = alloc n
-dispatch Eval           = eval2
-dispatch Add            = add
-dispatch Sub            = sub
-dispatch Mul            = mul
-dispatch Div            = div2
-dispatch Neg            = neg
-dispatch Eq             = eq
-dispatch Ne             = ne
-dispatch Lt             = lt
-dispatch Le             = le
-dispatch Gt             = gt
-dispatch Ge             = ge
-dispatch (Cond ist isf) = cond ist isf
-dispatch (Pack t n)     = pack t n
-dispatch (Casejump bs)  = casejump bs
-dispatch (Split n)      = split2 n
-dispatch (Print)        = print2
-dispatch (Pushbasic n)  = pushbasic n
-dispatch (MkBool)       = mkbool
-dispatch (MkInt)        = mkint
-dispatch (Get)          = get
-dispatch (Select r i)   = select r i
-dispatch (Error msg)    = error2 msg
+dispatch Unwind              = unwind
+dispatch (Pushglobal f)      = pushglobal f
+dispatch (Pushint n)         = pushint n
+dispatch (Push n)            = push n
+dispatch Mkap                = mkap
+dispatch (Update n)          = update n
+dispatch (Pop n)             = pop n
+dispatch (Slide n)           = slide n
+dispatch (Alloc n)           = alloc n
+dispatch Eval                = eval2
+dispatch Add                 = add
+dispatch Sub                 = sub
+dispatch Mul                 = mul
+dispatch Div                 = div2
+dispatch Neg                 = neg
+dispatch Eq                  = eq
+dispatch Ne                  = ne
+dispatch Lt                  = lt
+dispatch Le                  = le
+dispatch Gt                  = gt
+dispatch Ge                  = ge
+dispatch (Cond ist isf)      = cond ist isf
+dispatch (Pack t n)          = pack t n
+dispatch (CasejumpSimple bs) = casejumpSimple bs
+dispatch (CasejumpConstr bs) = casejumpConstr bs
+dispatch (Split n)           = split2 n
+dispatch (Print)             = print2
+dispatch (Pushbasic n)       = pushbasic n
+dispatch (MkBool)            = mkbool
+dispatch (MkInt)             = mkint
+dispatch (Get)               = get
+dispatch (Select r i)        = select r i
+dispatch (Error msg)         = error2 msg
 
 unwind :: GmState -> GmState
 unwind state = newState (hLookup heap addr) state
@@ -322,9 +323,18 @@ pack t n state =
         (heap', addr) = hAlloc (getHeap state) (NConstr t $ take n stack)
         stack = getStack state
 
-casejump :: Assoc Pattern GmCode -> GmState -> GmState
+
+casejumpSimple :: Assoc Int GmCode -> GmState -> GmState
+casejumpSimple = casejump
+
+
+casejumpConstr :: Assoc Int GmCode -> GmState -> GmState
+casejumpConstr = casejump
+
+
+casejump :: Assoc Int GmCode -> GmState -> GmState
 casejump branches state =
-    case findMatchingPattern branches node of
+    case findMatchingBranch branches node of
         (Just code') -> putCode (code' ++ code) state
         Nothing -> error "No suitable case branch found! This should not happen in a typechecked implementation!"
     where
@@ -334,18 +344,18 @@ casejump branches state =
         code = getCode state
 
 
-findMatchingPattern :: Assoc Pattern GmCode -> Node -> Maybe GmCode
-findMatchingPattern ((PConstr t1 a1 args1, code) : branches) node@(NGlobal arity [Pack t2 a2, _, _])
-    | t1 == t2 && a1 == a2 = Just code
-    | otherwise = findMatchingPattern branches node
-findMatchingPattern ((PConstr t1 a1 args1, code) : branches) node@(NConstr t2 args2)
-    | t1 == t2 = Just code
-    | otherwise = findMatchingPattern branches node
-findMatchingPattern ((PNum n1, code) : branches) node@(NNum n2)
-    | n1 == n2 = Just code
-    | otherwise = findMatchingPattern branches node
-findMatchingPattern ((PDefault, code) : branches) node = Just code
-findMatchingPattern branches node = Nothing
+findMatchingBranch :: Assoc Int GmCode -> Node -> Maybe GmCode
+findMatchingBranch ([(n, code)]) node = Just code
+findMatchingBranch ((n, code) : bs) node@(NNum n')
+    | n == n'   = Just code
+    | otherwise = findMatchingBranch bs node
+findMatchingBranch ((n, code) : bs) node@(NConstr tag args)
+    | n == tag  = Just code
+    | otherwise = findMatchingBranch bs node
+findMatchingBranch ((n, code) : bs) node@(NGlobal r [Pack tag arity, _, _])
+    | n == tag  = Just code
+    | otherwise = findMatchingBranch bs node
+findMatchingBranch branches node = Nothing
 
 
 split2 :: Int -> GmState -> GmState

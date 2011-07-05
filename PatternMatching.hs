@@ -9,6 +9,8 @@ import ParserTypes
 import Debug.Trace
 import NameSupply as NS
 import AbstractDataTypes
+import LetTransformer
+import CaseTransformer
 
 
 data PatternClass = Num | Var | Constr
@@ -67,43 +69,43 @@ getConstr ((PConstr tag arity ps') : ps, expr) = tag
 getConstr x = error $ show x
 
 
-patternMatch :: PatProgram -> CoreProgram
-patternMatch (dts, scs) = (dts', scs')
+patternMatch :: PatProgram -> PatProgram
+patternMatch (dts, scs) = (dts, scs')
     where
-        scs' = List.map (matchSc dts) scs
-        dts' = [(name, cs) | (name, cs) <- dts]
+        scs' = [matchSc dts sc | sc <- scs]
 
-matchSc :: [DataType] -> PatScDefn -> CoreScDefn
-matchSc dts (name, eqs) = (name, vars, matchEquations ns' dts n vars eqs def)
+
+matchSc :: [DataType] -> PatScDefn -> PatScDefn
+matchSc dts (name, eqs) = (name, [(vars, matchEquations ns' dts n varNames eqs def)])
     where
         (patterns, expr) = head eqs
         n = length patterns
-        (ns', vars) = getNames initialNameSupply ["_u" | i <- [1..n]]
+        (ns', varNames) = getNames initialNameSupply ["_u" | i <- [1..n]]
+        vars = [PVar v | v <- varNames]
         def = EError "No matching pattern found"
 
 
-matchExpr :: [DataType] -> Expr Pattern -> CoreExpr -> CoreExpr
+matchExpr :: [DataType] -> Expr Pattern -> Expr Pattern -> Expr Pattern
 matchExpr dts (ENum n) def = ENum n
 matchExpr dts (EVar v) def = EVar v
 matchExpr dts (EConstr t a) def = EConstr t a
 matchExpr dts (ESelect arity pos name) def = ESelect arity pos name
 matchExpr dts (EAp e1 e2) def = EAp (matchExpr dts e1 def) (matchExpr dts e2 def)
-matchExpr dts (ELam pattern expr) def = ELam args' expr'
+matchExpr dts (ELam pattern expr) def = ELam [(PVar name)] expr'
     where
         (ns', name) = getName initialNameSupply "_u"
-        args' = [name]
-        expr' = matchEquations ns' dts 1 args' [(pattern, expr)] def
+        expr' = matchEquations ns' dts 1 [name] [(pattern, expr)] def
 matchExpr dts (ELet isRec defns expr) def = ELet isRec defns' expr'
     where
         expr' = matchExpr dts expr def
-        defns' = [(v, matchExpr dts rhs def) | (PVar v, rhs) <- defns]
+        defns' = [(pattern, matchExpr dts rhs def) | (pattern, rhs) <- defns]
 matchExpr dts (ECase expr alts) def = ECase expr' alts'
     where
         expr' = matchExpr dts expr def
         alts' = [(pattern, matchExpr dts rhs def) | (pattern, rhs) <- alts] ++ [(PDefault, def)]
 
 
-matchEquations :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchEquations :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
 matchEquations ns dts n [] eqs def =
     case eqs of
         ((pattern, expr) : eqs') -> matchExpr dts expr def
@@ -111,7 +113,7 @@ matchEquations ns dts n [] eqs def =
 matchEquations ns dts n vs eqs def = foldr (matchPatternClass ns dts n vs) def $ Utils.partition classifyEquation eqs
 
 
-matchPatternClass :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchPatternClass :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
 matchPatternClass ns dts n vars eqs def =
     case classifyEquation $ head eqs of
         Constr -> matchConstr ns dts n vars eqs def
@@ -119,17 +121,17 @@ matchPatternClass ns dts n vars eqs def =
         Num    -> matchNum ns dts n vars eqs def
 
 
-matchVar :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchVar :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
 matchVar ns dts n (var : vars) eqs def =
     matchEquations ns dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
 
 
-matchNum :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchNum :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
 matchNum ns dts n vars@(v : vs) eqs def =
     ECase (EVar v) $ [(numPattern, matchEquations ns dts n vs [(ps, expr)] def) | (numPattern : ps, expr) <- eqs] ++ [(PDefault, def)]
 
 
-matchConstr :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreExpr
+matchConstr :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
 matchConstr ns dts n vars@(v : vs) eqs def =
     ECase (EVar v) [matchConstrAlter ns dts tag n vars (choose tag eqs) def | tag <- tags]
     where
@@ -143,7 +145,7 @@ matchConstr ns dts n vars@(v : vs) eqs def =
         isConstr t _ = False
 
 
-matchConstrAlter :: NameSupply -> [DataType] -> Int -> Int -> [Name] -> [Equation] -> CoreExpr -> CoreAlt
+matchConstrAlter :: NameSupply -> [DataType] -> Int -> Int -> [Name] -> [Equation] -> Expr Pattern -> Alter Pattern Pattern
 matchConstrAlter ns dts tag n (v : vs) eqs def =
     (PConstr tag n' $ List.map PVar vs', matchEquations ns' dts (n' + n) (vs' ++ vs) eqs' def)
     where

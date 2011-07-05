@@ -107,9 +107,10 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
     where n = length defs
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
---TODO: change to ECase
-compileR d (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD (compileR $ d + 1) alts $ argOffset 1 env]
+compileR d (ECaseSimple expr alts) env =
+    compileE expr env ++ [CasejumpSimple $ compileD (compileR $ d + 1) alts $ argOffset 1 env]
+compileR d (ECaseConstr expr alts) env =
+    compileE expr env ++ [CasejumpConstr $ compileD (compileR $ d + 1) alts $ argOffset 1 env]
 compileR d expr env = compileE expr env ++ [Update d, Pop d, Unwind]
 
 
@@ -135,8 +136,10 @@ compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
 compileE (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileE defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileE defs body env
-compileE (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
+compileE (ECaseSimple expr alts) env =
+    compileE expr env ++ [CasejumpSimple $ compileD compileE alts $ argOffset 1 env]
+compileE (ECaseConstr expr alts) env =
+    compileE expr env ++ [CasejumpConstr $ compileD compileE alts $ argOffset 1 env]
 compileE (EAp (EVar "negate") expr) env =
     compileB expr env ++ [MkInt]
 compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
@@ -159,12 +162,12 @@ intOrBool name =
                 False -> error $ "Name: " ++ name ++ " is not a built-in operator"
 
 
-compileD :: GmCompiler -> [CoreAlt] -> Assoc Name Addr -> Assoc Pattern GmCode
+compileD :: GmCompiler -> [CoreAlt] -> Assoc Name Addr -> Assoc Int GmCode
 compileD comp alts env = [compileA comp alt env | alt <- alts]
 
 
-compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Pattern, GmCode)
-compileA comp (pattern, expr) env = (pattern, comp expr env)
+compileA :: GmCompiler -> CoreAlt -> Assoc Name Addr -> (Int, GmCode)
+compileA comp (num, expr) env = (num, comp expr env)
 -- TODO: shouldn't we use env' here instead of env?
 --    where
 --        n = length args
@@ -182,12 +185,14 @@ compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
     [Mkap]
-compileC (ESelect arity i v) env =
-    trace ("************* " ++ show v ++ show env) [Push $ aLookup env v $ error "dupa", Eval, Select arity i]
+compileC (ESelect r i v) env =
+    trace ("***********" ++ show v ++ ", " ++ (show (aLookup env v $ error "kupa"))) [Push $ aLookup env v $ error "dupa", Eval, Select r i]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
-compileC (ECase expr alts) env =
-    compileE expr env ++ [Casejump $ compileD compileE alts $ argOffset 1 env]
+compileC (ECaseSimple expr alts) env =
+    compileE expr env ++ [CasejumpSimple $ compileD compileE alts $ argOffset 1 env]
+compileC (ECaseConstr expr alts) env =
+    compileE expr env ++ [CasejumpConstr $ compileD compileE alts $ argOffset 1 env]
 compileC (EError msg) env = [Error msg]
 compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
 

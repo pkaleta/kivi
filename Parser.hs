@@ -220,11 +220,11 @@ pDefn = pThen3 mkDefn pPatternExpr (pLit "=") pExpr
         mkDefn patExpr _ expr = (patExpr, expr)
 
 
-pAlts :: Parser [Alter Pattern]
+pAlts :: Parser [Alter Pattern Pattern]
 pAlts = pOneOrMoreWithSep pAlt (pLit ";")
 
 
-pAlt :: Parser (Alter Pattern)
+pAlt :: Parser (Alter Pattern Pattern)
 pAlt = pThen3 mkAlt pPatternExpr (pLit "->") pExpr
     where
         mkAlt pattern _ expr = (pattern, expr)
