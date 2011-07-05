@@ -85,4 +85,6 @@ analyseExpr (free, ALet isRec defns expr) =
                 freeVars = foldl Set.union Set.empty $ [free | (name, (free, rhs)) <- localDefns]
                 defns' = [(name, analyseExpr rhs) | (name, rhs) <- localDefns]
                 isRec = Set.intersection freeVars binderSet /= Set.empty
+analyseExpr (free, ASelect r i v) = ESelect r i v
+analyseExpr (free, AError msg) = EError msg
 

@@ -32,7 +32,7 @@ import LambdaCalculusTransformer
 --runD = show . analyseDeps . parse
 
 runTest :: String -> String
-runTest = showResults . eval . compile . transformToLambdaCalculus . mergePatterns . tag . parse
+runTest = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
 
 makeStr :: GmHeap -> Node -> String
 makeStr heap (NNum n) = show n

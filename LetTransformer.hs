@@ -33,18 +33,23 @@ isRefutable other = True
 conformalityTransform :: [DataType] -> Expr Pattern -> Expr Pattern
 conformalityTransform adts (ELet isRec defns expr) = ELet isRec defns' expr
     where
-        defns' = [case isRefutable pattern of
-            True -> conformalityTransformDefn adts defn
-            False -> defn
-            | defn@(pattern, expr) <- defns]
+--        defns' = [case isRefutable pattern of
+--            True -> conformalityTransformDefn adts defn
+--            False -> defn
+--            | defn@(pattern, expr) <- defns]
+        (ns, defns') = mapAccumL (conformalityTransformDefn adts) initialNameSupply defns
 
 
-conformalityTransformDefn :: [DataType] -> Defn Pattern -> Defn Pattern
-conformalityTransformDefn adts (pattern, expr) = (pattern', expr')
-    where
-        pattern' = getTuplePattern adts pattern
-        expr' = ELet False [(PVar "v", expr)] body
-        body = EAp (ELam [pattern] $ getTupleConstr adts pattern) (EVar "v")
+conformalityTransformDefn :: [DataType] -> NameSupply -> Defn Pattern -> (NameSupply, Defn Pattern)
+conformalityTransformDefn adts ns defn@(pattern, expr) =
+        case isRefutable pattern of
+            True -> (ns', (pattern', expr'))
+                where
+                    pattern' = getTuplePattern adts pattern
+                    expr' = ELet False [(PVar varName, expr)] body
+                    body = EAp (ELam [pattern] $ getTupleConstr adts pattern) (EVar varName)
+                    (ns', varName) = getName ns "v"
+            False -> (ns, defn)
 
 
 getTupleConstr :: [DataType] -> Pattern -> Expr Pattern
@@ -75,22 +80,27 @@ getPatternVarNames (PConstr tag arity patterns) = foldl collectVars [] patterns
         collectVars vars pattern = vars ++ getPatternVarNames pattern
 
 
-createLet :: [DataType] -> (Pattern, Expr Pattern) -> Expr Pattern -> Expr Pattern
-createLet adts (pattern@(PVar v), rhs) expr = ELet False [(pattern, rhs)] expr
---TODO: use namesupply here too instead of hardcoding variable names
-createLet adts (pattern@(PConstr tag arity args), rhs) expr =
-    ELet False [(PVar "v", rhs)] $ foldr mkLet expr $ [vars] ++ [[constr] | constr <- constrs]
+createLet :: [DataType] -> (Pattern, Expr Pattern) -> (NameSupply, Expr Pattern) -> (NameSupply, Expr Pattern)
+createLet adts (pattern@(PVar v), rhs) (ns, expr) = (ns, ELet False [(pattern, rhs)] expr)
+createLet adts (pattern@(PConstr tag arity args), rhs) (ns, expr) =
+    (ns2, ELet False defns' expr')
     where
-        mkLet patterns letExpr =
+        (ns1, var1) = getName ns "v"
+
+        defns' = [(PVar var1, rhs)]
+        (ns2, expr') = foldr mkLet (ns1, expr) $ [vars] ++ [[constr] | constr <- constrs]
+
+        mkLet patterns (ns, letExpr) =
             case head patterns of
                 -- there should not be the case for num because when num is in
                 -- pattern it means that pattern is refutable
                 (PVar v, pos) ->
-                    ELet False [(PVar v, ESelect arity pos "v") | (PVar v, pos) <- patterns] letExpr
+                    (ns, ELet False [(PVar v, ESelect arity pos var1) | (PVar v, pos) <- patterns] letExpr)
                 (PConstr t a ps, pos) ->
-                    ELet False [(PVar "w", ESelect arity pos "v")] body
+                    (ns2, ELet False [(PVar varName, ESelect arity pos var1)] body)
                     where
-                        body = foldr (createLet adts) letExpr [(pattern, ESelect a i "w") | (pattern, i) <- zip ps [0..]]
+                        (ns1, varName) = getName ns "v"
+                        (ns2, body) = foldr (createLet adts) (ns1, letExpr) [(pattern, ESelect a i varName) | (pattern, i) <- zip ps [0..]]
 
         (vars, constrs) = partition isVar $ zip args [0..]
 
@@ -115,7 +125,9 @@ collectDefs name arity (ns, acc) ((PConstr t a as), i) =
 
 
 irrefutableToSimple :: [DataType] -> Expr Pattern -> Expr Pattern
-irrefutableToSimple adts (ELet False defns expr) = foldr (createLet adts) expr defns
+irrefutableToSimple adts (ELet False defns expr) = letExpr
+    where
+        (ns, letExpr) = foldr (createLet adts) (initialNameSupply, expr) defns
 irrefutableToSimple adts (ELet True defns expr) = ELet True defns' expr
     where
         (ns, defns') = foldl (createLetrec adts) (initialNameSupply, []) defns

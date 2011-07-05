@@ -23,6 +23,8 @@ data AnnExpr' a b = AVar Name
                   | ACaseSimple (AnnExpr a b) [AnnAlt a b]
                   | ACaseConstr (AnnExpr a b) [AnnAlt a b]
                   | ALam [a] (AnnExpr a b)
+                  | ASelect Int Int a
+                  | AError String
     deriving Show
 
 type AnnDefn a b = (a, AnnExpr a b)
@@ -72,6 +74,8 @@ calcFreeVars localVars (ECaseSimple expr alts) = calcFreeVarsCase ACaseSimple lo
 calcFreeVars localVars (ECaseConstr expr alts) = calcFreeVarsCase ACaseConstr localVars expr alts
 calcFreeVars localVars (EConstr t n) =
     (Set.empty, AConstr t n)
+calcFreeVars localVars (ESelect r i name) = (Set.empty, ASelect r i name)
+calcFreeVars localVars (EError msg) = (Set.empty, AError msg)
 
 
 calcFreeVarsCase :: ((AnnExpr Name (Set Name)) -> [AnnAlt Name (Set Name)] -> AnnExpr' Name (Set Name))
@@ -109,6 +113,8 @@ abstractExpr (freeVars, ALam args expr) =
 abstractExpr (freeVars, ACaseSimple expr alts) = abstractExprCase ECaseSimple freeVars expr alts
 abstractExpr (freeVars, ACaseConstr expr alts) = abstractExprCase ECaseConstr freeVars expr alts
 abstractExpr (freeVars, AConstr t a) = EConstr t a
+abstractExpr (freeVars, ASelect r i v) = ESelect r i v
+abstractExpr (freeVars, AError msg) = EError msg
 
 
 abstractExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
@@ -177,6 +183,8 @@ renameExpr newNamesFun mapping ns (ELet isRec defns expr) =
 renameExpr newNamesFun mapping ns (ECaseSimple expr alts) = renameExprCase ECaseSimple newNamesFun mapping ns expr alts
 renameExpr newNamesFun mapping ns (ECaseConstr expr alts) = renameExprCase ECaseConstr newNamesFun mapping ns expr alts
 renameExpr newNamesFun mapping ns (EConstr t a) = (ns, EConstr t a)
+renameExpr newNamesFun mapping ns (ESelect r i v) = (ns, ESelect r i v)
+renameExpr newNamesFun mapping ns (EError msg) = (ns, EError msg)
 
 
 renameExprCase :: (Expr a -> [Alter Int a] -> Expr a)
@@ -264,6 +272,8 @@ collectExpr (ELet isRec defns expr) =
 collectExpr (ECaseSimple expr alts) = collectExprCase ECaseSimple expr alts
 collectExpr (ECaseConstr expr alts) = collectExprCase ECaseConstr expr alts
 collectExpr (EConstr t a) = ([], EConstr t a)
+collectExpr (ESelect r i v) = ([], ESelect r i v)
+collectExpr (EError msg) = ([], EError msg)
 
 
 collectExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
@@ -298,9 +308,9 @@ separateLambdas ((name, args, expr) : scs) = (name, [], mkSepArgs args $ separat
 
 
 separateLambdasExpr :: CoreExpr -> CoreExpr
-separateLambdasExpr (ENum n) = (ENum n)
-separateLambdasExpr (EVar v) = (EVar v)
-separateLambdasExpr (EConstr t a) = (EConstr t a)
+separateLambdasExpr (ENum n) = ENum n
+separateLambdasExpr (EVar v) = EVar v
+separateLambdasExpr (EConstr t a) = EConstr t a
 separateLambdasExpr (EAp e1 e2) = EAp (separateLambdasExpr e1) (separateLambdasExpr e2)
 separateLambdasExpr (ECaseSimple expr alts) = separateLambdasExprCase ECaseSimple expr alts
 separateLambdasExpr (ECaseConstr expr alts) = separateLambdasExprCase ECaseConstr expr alts
@@ -311,6 +321,8 @@ separateLambdasExpr (ELet isRec defns body) =
     ELet isRec (map mkDefn defns) (separateLambdasExpr body)
     where
         mkDefn (name, expr) = (name, separateLambdasExpr expr)
+separateLambdasExpr (ESelect r i v) = ESelect r i v
+separateLambdasExpr (EError msg) = EError msg
 
 
 separateLambdasExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr) -> CoreExpr -> [CoreAlt] -> CoreExpr
@@ -382,6 +394,9 @@ freeToLevelExpr level env (free, ACaseSimple expr alts) =
     freeToLevelExprCase ACaseSimple level env free expr alts
 freeToLevelExpr level env (free, ACaseConstr expr alts) =
     freeToLevelExprCase ACaseConstr level env free expr alts
+--TODO: not sure if this is correct
+freeToLevelExpr level env (free, ASelect r i v) = (0, ASelect r i (v, 0))
+freeToLevelExpr level env (free, AError msg) = (0, AError msg)
 
 
 freeToLevelExprCase :: ((AnnExpr (Name, Level) Level) -> [AnnAlt (Name, Level) Level] -> (AnnExpr' (Name, Level) Level))
@@ -444,6 +459,8 @@ identifyMFEsExpr1 level (ALet isRec defns expr) =
         expr' = identifyMFEsExpr level expr
 identifyMFEsExpr1 level (ACaseSimple expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseSimple level expr exprLevel alts
 identifyMFEsExpr1 level (ACaseConstr expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseSimple level expr exprLevel alts
+identifyMFEsExpr1 level (ASelect r i (v, lvl)) = ESelect r i v
+identifyMFEsExpr1 level (AError msg) = EError msg
 
 
 identifyMFEsExpr1Case :: (Expr (Name, Level) -> [Alter Int (Name, Level)] -> Expr (Name, Level))
@@ -545,6 +562,8 @@ floatExpr (ELet isRec defns expr) =
                 (rhsFds, rhs') = floatExpr rhs
 floatExpr (ECaseSimple expr alts) = floatExprCase ECaseSimple expr alts
 floatExpr (ECaseConstr expr alts) = floatExprCase ECaseConstr expr alts
+floatExpr (ESelect r i v) = ([], ESelect r i v)
+floatExpr (EError msg) = ([], EError msg)
 
 
 floatExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
