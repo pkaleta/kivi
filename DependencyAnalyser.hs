@@ -45,7 +45,7 @@ scc ins outs vs = topSortedSccs
 
 
 analyseDeps :: CoreProgram -> CoreProgram
-analyseDeps scs = [(name, args, analyseExpr expr) | (name, args, expr) <- freeVars scs]
+analyseDeps (adts, scs) = (adts, [(name, args, analyseExpr expr) | (name, args, expr) <- freeVars scs])
 
 
 analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
@@ -53,7 +53,10 @@ analyseExpr (free, ANum n) = ENum n
 analyseExpr (free, AVar v) = EVar v
 analyseExpr (free, AConstr t a) = EConstr t a
 analyseExpr (free, AAp e1 e2) = EAp (analyseExpr e1) (analyseExpr e2)
-analyseExpr (free, ACase expr alts) = ECase (analyseExpr expr) [(tag, args, analyseExpr body) | (tag, args, body) <- alts]
+analyseExpr (free, ACaseSimple expr alts) =
+    ECaseSimple (analyseExpr expr) [(tag, analyseExpr body) | (tag, body) <- alts]
+analyseExpr (free, ACaseConstr expr alts) =
+    ECaseConstr (analyseExpr expr) [(tag, analyseExpr body) | (tag, body) <- alts]
 analyseExpr (free, ALam args expr) = ELam args $ analyseExpr expr
 analyseExpr (free, ALet isRec defns expr) =
     foldr splitLet expr' binderComponents
