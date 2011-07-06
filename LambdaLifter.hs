@@ -30,8 +30,6 @@ data AnnExpr' a b = AVar Name
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, AnnExpr a b)
 type AnnProgram a b = [(Name, [a], AnnExpr a b)]
-type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
-type Level = Int
 
 
 lambdaLift :: CoreProgram -> CoreProgram
@@ -46,7 +44,7 @@ freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (Set.fromList ar
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
 calcFreeVars localVars (ENum n) = (Set.empty, ANum n)
 calcFreeVars localVars (EVar v) | Set.member v localVars = (Set.singleton v, AVar v)
-                                | otherwise = (Set.empty, AVar v)
+                                | otherwise              = (Set.empty, AVar v)
 calcFreeVars localVars (EAp e1 e2) = (Set.union s1 s2, AAp ae1 ae2)
     where
         ae1@(s1, _) = calcFreeVars localVars e1
@@ -74,7 +72,8 @@ calcFreeVars localVars (ECaseSimple expr alts) = calcFreeVarsCase ACaseSimple lo
 calcFreeVars localVars (ECaseConstr expr alts) = calcFreeVarsCase ACaseConstr localVars expr alts
 calcFreeVars localVars (EConstr t n) =
     (Set.empty, AConstr t n)
-calcFreeVars localVars (ESelect r i name) = (Set.empty, ASelect r i name)
+calcFreeVars localVars (ESelect r i name) | Set.member name localVars = (Set.singleton name, ASelect r i name)
+                                          | otherwise                 = (Set.empty, ASelect r i name)
 calcFreeVars localVars (EError msg) = (Set.empty, AError msg)
 
 

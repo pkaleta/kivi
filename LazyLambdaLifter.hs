@@ -8,6 +8,11 @@ import Utils
 import Data.Map as Map
 import Data.Set as Set
 import Data.List as List
+import Debug.Trace
+
+
+type FloatedDefns = [(Level, IsRec, [(Name, Expr Name)])]
+type Level = Int
 
 
 lazyLambdaLift :: CoreProgram -> CoreProgram
@@ -108,7 +113,7 @@ freeToLevelExpr level env (free, ACaseSimple expr alts) =
 freeToLevelExpr level env (free, ACaseConstr expr alts) =
     freeToLevelExprCase ACaseConstr level env free expr alts
 --TODO: not sure if this is correct
-freeToLevelExpr level env (free, ASelect r i v) = (varLevel, ASelect r i (v, varLevel))
+freeToLevelExpr level env (free, expr@(ASelect r i v)) = (varLevel, ASelect r i (v, varLevel))
     where
         varLevel = case Map.lookup v env of
             Just level -> level
@@ -158,6 +163,8 @@ identifyMFEsExpr cxtLevel (exprLevel, expr) =
         notMFECandidate (ANum n) = True
         notMFECandidate (AVar v) = True
         notMFECandidate (AConstr t a) = True
+        notMFECandidate (AError msg) = True
+        notMFECandidate (ASelect r i v) = True
         notMFECandidate _ = False
 
         transformMFE level expr = ELet False [(("v", level), expr)] (EVar "v")
@@ -175,7 +182,7 @@ identifyMFEsExpr1 level (ALet isRec defns expr) =
         defns' = [((name, defnLevel), identifyMFEsExpr defnLevel rhs) | ((name, defnLevel), rhs) <- defns]
         expr' = identifyMFEsExpr level expr
 identifyMFEsExpr1 level (ACaseSimple expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseSimple level expr exprLevel alts
-identifyMFEsExpr1 level (ACaseConstr expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseSimple level expr exprLevel alts
+identifyMFEsExpr1 level (ACaseConstr expr@(exprLevel, _) alts) = identifyMFEsExpr1Case ECaseConstr level expr exprLevel alts
 identifyMFEsExpr1 level (ASelect r i (v, lvl)) = ESelect r i v
 identifyMFEsExpr1 level (AError msg) = EError msg
 
@@ -236,9 +243,7 @@ collectFloatedSc scsAcc (name, [], expr) =
         floatedScs = foldl createScs [] fds
 
         createScs scs (level, isRec, defns) =
-            scs ++ List.map createSc defns
-
-        createSc (name, defn) = (name, [], defn)
+            scs ++ [(name, [], defn) | (name, defn) <- defns]
 
 
 floatExpr :: Expr (Name, Level) -> (FloatedDefns, CoreExpr)
@@ -266,8 +271,9 @@ floatExpr (ELam args expr) =
             where
                 wrapDefn (level, isRec, defns) expr = ELet isRec defns expr
 floatExpr (ELet isRec defns expr) =
-    (defnsFds ++ [localFd] ++ exprFds, expr')
+    (outerFds, expr')
     where
+        outerFds = defnsFds ++ [localFd] ++ exprFds
         (exprFds, expr') = floatExpr expr
         (defnsFds, defns') = mapAccumL collectDefns [] defns
         localFd = (level, isRec, defns')
