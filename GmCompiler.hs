@@ -188,7 +188,7 @@ compileC (EAp e1 e2) env =
 compileC (ESelect r i v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This cannot happen", Eval, Select r i]
-        False -> [Pushglobal v]
+        False -> [Pushglobal v, Eval, Select r i]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
 compileC (ECaseSimple expr alts) env =
@@ -223,7 +223,8 @@ compileArgs defs env =
 
 compileLetrec :: [Instruction] -> GmCompiler -> [(Name, CoreExpr)] -> GmCompiler
 compileLetrec finalInstrs comp defs body env =
-    trace ("################" ++ show env') [Alloc n] ++ compileRecDefs n defs env' ++ comp body env' ++ finalInstrs
+    --trace ("################" ++ show env') 
+    [Alloc n] ++ compileRecDefs n defs env' ++ comp body env' ++ finalInstrs
     where
         n = length defs
         env' = compileArgs defs env
