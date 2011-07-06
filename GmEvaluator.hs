@@ -13,6 +13,7 @@ import Data.List.Utils
 import PatternMatching
 import AbstractDataTypes
 import LambdaLifter
+import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 --import DependencyAnalyser
@@ -34,8 +35,8 @@ import LambdaCalculusTransformer
 runTest :: String -> String
 runTest = show . lambdaLift . transformToLambdaCalculus . mergePatterns . tag . parse
 
-run :: String -> String
-run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
+--run :: String -> String
+--run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
 
 makeStr :: GmHeap -> Node -> String
 makeStr heap (NNum n) = show n
