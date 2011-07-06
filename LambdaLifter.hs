@@ -183,7 +183,12 @@ renameExpr newNamesFun mapping ns (ELet isRec defns expr) =
 renameExpr newNamesFun mapping ns (ECaseSimple expr alts) = renameExprCase ECaseSimple newNamesFun mapping ns expr alts
 renameExpr newNamesFun mapping ns (ECaseConstr expr alts) = renameExprCase ECaseConstr newNamesFun mapping ns expr alts
 renameExpr newNamesFun mapping ns (EConstr t a) = (ns, EConstr t a)
-renameExpr newNamesFun mapping ns (ESelect r i v) = (ns, ESelect r i v)
+renameExpr newNamesFun mapping ns (ESelect r i v) = 
+    (ns, ESelect r i v') -- for built-int functions (+,-, etc.) we have to use old name
+    where
+        v' = case Map.lookup v mapping of
+            (Just x) -> x
+            Nothing -> v
 renameExpr newNamesFun mapping ns (EError msg) = (ns, EError msg)
 
 

@@ -6,21 +6,41 @@ import Common
 import List
 import NameSupply
 import AbstractDataTypes
+import Debug.Trace
 
 
 transformLet :: [DataType] -> Expr Pattern -> Expr Pattern
-transformLet adts (EAp e1 e2) = EAp (transformLet adts e1) (transformLet adts e2)
-transformLet adts (ELam args expr) = ELam args $ transformLet adts expr
-transformLet adts (ECase expr alts) = ECase expr' alts'
+transformLet adts expr = expr'
     where
-        expr' = transformLet adts expr
-        alts' = [(pattern, transformLet adts expr) | (pattern, expr) <- alts]
-transformLet adts (ELet isRec defns expr) =
-    (irrefutableToSimple adts) . (conformalityTransform adts) $ ELet isRec defns' expr'
+        (ns', expr') = transformLet' initialNameSupply adts expr
+
+
+transformLet' :: NameSupply -> [DataType] -> Expr Pattern -> (NameSupply, Expr Pattern)
+transformLet' ns adts (EAp e1 e2) = (ns2, EAp e1' e2')
     where
-        expr' = transformLet adts expr
-        defns' = [(pattern, transformLet adts rhs) | (pattern, rhs) <- defns]
-transformLet adts expr = expr
+        (ns1, e1') = transformLet' ns adts e1
+        (ns2, e2') = transformLet' ns1 adts e2
+transformLet' ns adts (ELam args expr) = (ns', ELam args expr')
+    where
+        (ns', expr') = transformLet' ns adts expr
+transformLet' ns adts (ECase expr alts) = (ns2, ECase expr' alts')
+    where
+        (ns1, expr') = transformLet' ns adts expr
+        (ns2, alts') = mapAccumL collectCase ns1 alts
+
+        collectCase ns (pattern, expr) = (ns', (pattern, expr'))
+            where
+                (ns', expr') = transformLet' ns adts expr
+transformLet' ns adts (ELet isRec defns expr) =
+    (irrefutableToSimple adts) . (conformalityTransform adts) $ (ns2, ELet isRec defns' expr')
+    where
+        (ns1, expr') = transformLet' ns adts expr
+        (ns2, defns') = mapAccumL collectLet ns1 defns
+
+        collectLet ns (pattern, expr) = (ns, (pattern, expr))
+            where
+                (ns', expr') = transformLet' ns adts expr
+transformLet' ns adts expr = (ns, expr)
 
 
 isRefutable :: Pattern -> Bool
@@ -30,14 +50,10 @@ isRefutable (PConstr tag arity args) =
 isRefutable other = True
 
 
-conformalityTransform :: [DataType] -> Expr Pattern -> Expr Pattern
-conformalityTransform adts (ELet isRec defns expr) = ELet isRec defns' expr
+conformalityTransform :: [DataType] -> (NameSupply, Expr Pattern) -> (NameSupply, Expr Pattern)
+conformalityTransform adts (ns, ELet isRec defns expr) = (ns', ELet isRec defns' expr)
     where
---        defns' = [case isRefutable pattern of
---            True -> conformalityTransformDefn adts defn
---            False -> defn
---            | defn@(pattern, expr) <- defns]
-        (ns, defns') = mapAccumL (conformalityTransformDefn adts) initialNameSupply defns
+        (ns', defns') = mapAccumL (conformalityTransformDefn adts) ns defns
 
 
 conformalityTransformDefn :: [DataType] -> NameSupply -> Defn Pattern -> (NameSupply, Defn Pattern)
@@ -81,15 +97,14 @@ getPatternVarNames (PConstr tag arity patterns) = foldl collectVars [] patterns
 
 
 createLet :: [DataType] -> (Pattern, Expr Pattern) -> (NameSupply, Expr Pattern) -> (NameSupply, Expr Pattern)
-createLet adts (pattern@(PVar v), rhs) (ns, expr) = (ns, ELet False [(pattern, rhs)] expr)
-createLet adts (pattern@(PConstr tag arity args), rhs) (ns, expr) =
-    (ns2, ELet False defns' expr')
+createLet adts (pattern@(PConstr tag arity args), rhs) (ns, expr) = (ns1, ELet False defns' expr')
     where
         (ns1, var1) = getName ns "v"
 
         defns' = [(PVar var1, rhs)]
         (ns2, expr') = foldr mkLet (ns1, expr) $ [vars] ++ [[constr] | constr <- constrs]
 
+        mkLet [] acc = acc
         mkLet patterns (ns, letExpr) =
             case head patterns of
                 -- there should not be the case for num because when num is in
@@ -100,12 +115,14 @@ createLet adts (pattern@(PConstr tag arity args), rhs) (ns, expr) =
                     (ns2, ELet False [(PVar varName, ESelect arity pos var1)] body)
                     where
                         (ns1, varName) = getName ns "v"
-                        (ns2, body) = foldr (createLet adts) (ns1, letExpr) [(pattern, ESelect a i varName) | (pattern, i) <- zip ps [0..]]
+                        (ns2, body) = foldr (createLet adts) (ns1, letExpr) defns'
+                        defns' = [(pattern, ESelect a i varName) | (pattern, i) <- zip ps [0..]]
 
         (vars, constrs) = partition isVar $ zip args [0..]
 
         isVar ((PVar v), pos) = True
         isVar _               = False
+createLet adts (pattern, rhs) (ns, expr) = (ns, ELet False [(pattern, rhs)] expr)
 
 
 createLetrec :: [DataType] -> (NameSupply, [(Pattern, Expr Pattern)]) -> (Pattern, Expr Pattern) -> (NameSupply, [(Pattern, Expr Pattern)])
@@ -124,13 +141,11 @@ collectDefs name arity (ns, acc) ((PConstr t a as), i) =
         (ns', name') = getName ns "v"
 
 
-irrefutableToSimple :: [DataType] -> Expr Pattern -> Expr Pattern
-irrefutableToSimple adts (ELet False defns expr) = letExpr
+irrefutableToSimple :: [DataType] -> (NameSupply, Expr Pattern) -> (NameSupply, Expr Pattern)
+irrefutableToSimple adts (ns, ELet False defns expr) = foldr (createLet adts) (ns, expr) defns
+irrefutableToSimple adts (ns, ELet True defns expr) = (ns', ELet True defns' expr)
     where
-        (ns, letExpr) = foldr (createLet adts) (initialNameSupply, expr) defns
-irrefutableToSimple adts (ELet True defns expr) = ELet True defns' expr
-    where
-        (ns, defns') = foldl (createLetrec adts) (initialNameSupply, []) defns
-irrefutableToSimple adts expr =
+        (ns', defns') = foldl (createLetrec adts) (ns, []) defns
+irrefutableToSimple adts (ns, expr) =
     error $ "Trying to apply transformation for irrefutable let(rec)s into simple let(rec)s for: " ++ show expr
 

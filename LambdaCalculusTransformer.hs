@@ -63,7 +63,7 @@ transformExpr (ECaseSimple expr alts) = ECaseSimple expr' alts'
     where
         expr' = transformExpr expr
         alts' = [(n, transformExpr expr) | (n, expr) <- alts]
-transformExpr (ECaseConstr expr alts) = ECaseSimple expr' alts'
+transformExpr (ECaseConstr expr alts) = ECaseConstr expr' alts'
     where
         expr' = transformExpr expr
         alts' = [(n, transformExpr expr) | (n, expr) <- alts]

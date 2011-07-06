@@ -11,5 +11,5 @@ main = do
     let (flags, nonOpts, msgs) = getOpt RequireOrder [] args
     let [fileName] = nonOpts
     content <- readFile fileName
-    putStrLn . runTest $ content
+    putStrLn . run $ content
 
