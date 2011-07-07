@@ -131,7 +131,7 @@ syntax = takeFirstParse . pProgram
 
 
 pList :: Parser (Expr Pattern)
-pList = pThen3 mkList (pLit "[") (pOneOrMoreWithSep pExpr (pLit ",")) (pLit "]")
+pList = pThen3 mkList (pLit "[") (pZeroOrMoreWithSep pExpr (pLit ",")) (pLit "]")
     where
         mkList _ exprs _ = foldr cons (EConstrName "Nil") exprs
 
