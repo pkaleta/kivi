@@ -59,7 +59,7 @@ getCompiledCode program@(adts, scs) =
         compiled = foldl getCode [] globals
 
         stringify acc (name, expr, code) =
-            acc ++ show name ++ ":\n" ++ show expr ++ "\n\n" ++ show code ++ "\n\n"
+            acc ++ show expr ++ "\n\n" ++ show code ++ "\n\n"
 
         getCode acc (name, addr) =
             (name, find name scs, code) : acc
@@ -68,7 +68,7 @@ getCompiledCode program@(adts, scs) =
 
         find n1 (sc@(ScDefn n2 args expr) : rest) | n1 == n2  = sc
                                                   | otherwise = find n1 rest
-        find n1 [] = (ScDefn "unnamed" [] (EVar "x"))
+        find n1 [] = (ScDefn n1 [] (EError "Built-in function: code not available"))
 
 
 compile :: CoreProgram -> GmState
