@@ -203,7 +203,7 @@ showExpr' indent (ENum n) = show n
 showExpr' indent (EConstr t a) = "CONSTR" ++ show t
 showExpr' indent (EAp e1 e2) = "(" ++ showExpr' indent e1 ++ " " ++ showExpr' indent e2 ++ ")"
 showExpr' indent (ELet isRec defns expr) =
-    getIndent indent ++ letKeyword ++ defnsStr ++ "\n" ++ getIndent indent ++ "in\n" ++ showExpr' (indent+1) expr
+    letKeyword ++ defnsStr ++ "\n" ++ getIndent indent ++ "in\n" ++ getIndent (indent+1) ++ showExpr' (indent+1) expr
     where
         letKeyword | isRec     = "letrec"
                    | otherwise = "let"
@@ -216,7 +216,7 @@ showExpr' indent (ESelect r i v) = "Select " ++ show r ++ " " ++ show i ++ " " +
 
 showExprCase :: Show a => Int -> String -> Expr a -> [Alter Int a] -> String
 showExprCase indent t expr alts =
-    getIndent indent ++ "Case" ++ t ++ " " ++ showExpr' indent expr ++ " of" ++ altsStr
+    "Case" ++ t ++ " " ++ showExpr' indent expr ++ " of" ++ altsStr
     where
         altsStr = foldl (++) "" ["\n" ++ getIndent (indent+1) ++ show n ++ " = " ++ showExpr' (indent+1) expr | (n, expr) <- alts]
 
@@ -226,7 +226,7 @@ defaultIndent = "  "
 
 
 getIndent :: Int -> String
-getIndent n = join "" [defaultIndent | i <- [0..n]]
+getIndent n = join "" [defaultIndent | i <- [0..n-1]]
 
 
 showScDefn :: Show a => ScDefn a -> String
