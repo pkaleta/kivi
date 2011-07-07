@@ -21,7 +21,7 @@ traverse :: ([DataType] -> Expr Pattern -> Expr Pattern)
          -> ([DataType], [PatScDefn])
 traverse transformFunction (adts, scs) = (adts, scs')
     where
-        scs' = [(name, traverseEqs (transformFunction adts) eqs) | (name, eqs) <- scs]
+        scs' = [PatScDefn name $ traverseEqs (transformFunction adts) eqs | (PatScDefn name eqs) <- scs]
 
 
 traverseEqs :: (Expr Pattern -> Expr Pattern) -> [Equation] -> [Equation]
@@ -42,8 +42,8 @@ transform (adts, scs) = (adts, [transformSc sc | sc <- scs])
 
 
 transformSc :: PatScDefn -> CoreScDefn
-transformSc (name, [(patterns, expr)]) =
-    (name, [transformPattern pattern | pattern <- patterns], transformExpr expr)
+transformSc (PatScDefn name [(patterns, expr)]) =
+    ScDefn name [transformPattern pattern | pattern <- patterns] $ transformExpr expr
 
 
 transformExpr :: Expr Pattern -> CoreExpr

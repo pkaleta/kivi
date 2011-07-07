@@ -10,7 +10,7 @@ type Parser a = [Token] -> [(a, [Token])]
 type Equation = ([Pattern], Expr Pattern)
 
 
-type PatScDefn = (Name, [Equation])
+data PatScDefn = PatScDefn Name [Equation]
 
 
 type PatProgram = ([DataType], [PatScDefn])

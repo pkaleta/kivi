@@ -181,7 +181,7 @@ pDataType = pThen4 mkDataType (pLit "data") pDataTypeName (pLit "=") $ pOneOrMor
 pSc :: Parser PatScDefn
 pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
     where
-        mkSc name pattern equals expr = (name, [(pattern, expr)])
+        mkSc name pattern equals expr = PatScDefn name [(pattern, expr)]
 
 
 pExpr :: Parser (Expr Pattern)

@@ -22,7 +22,7 @@ lazyLambdaLift (adts, scs) =
 
 separateLambdas :: [CoreScDefn] -> [CoreScDefn]
 separateLambdas [] = []
-separateLambdas ((name, args, expr) : scs) = (name, [], mkSepArgs args $ separateLambdasExpr expr) : separateLambdas scs
+separateLambdas ((ScDefn name args expr) : scs) = (ScDefn name [] (mkSepArgs args $ separateLambdasExpr expr)) : separateLambdas scs
 
 
 separateLambdasExpr :: CoreExpr -> CoreExpr
@@ -62,7 +62,7 @@ annotateLevels = freeToLevel . freeVars
 
 freeToLevel :: AnnProgram Name (Set Name) -> AnnProgram (Name, Level) Level
 freeToLevel [] = []
-freeToLevel ((name, [], expr) : scs) = (name, [], freeToLevelExpr 0 Map.empty expr) : freeToLevel scs
+freeToLevel ((AnnScDefn name [] expr) : scs) = (AnnScDefn name [] $ freeToLevelExpr 0 Map.empty expr) : freeToLevel scs
 
 
 freeToLevelExpr :: Level -> Map Name Level -> AnnExpr Name (Set Name) -> AnnExpr (Name, Level) Level
@@ -148,7 +148,7 @@ freeSetToLevel env free =
 
 
 identifyMFEs :: AnnProgram (Name, Level) Level -> [ScDefn (Name, Level)]
-identifyMFEs scs = [(name, [], identifyMFEsExpr 0 expr) | (name, [], expr) <- scs]
+identifyMFEs scs = [(ScDefn name [] $ identifyMFEsExpr 0 expr) | (AnnScDefn name [] expr) <- scs]
 
 
 identifyMFEsExpr :: Level -> AnnExpr (Name, Level) Level -> Expr (Name, Level)
@@ -216,7 +216,7 @@ newNamesL ns names =
 
 
 mergeLambdas :: [ScDefn (Name, Level)] -> [ScDefn (Name, Level)]
-mergeLambdas scs = [(name, args, mergeLambdasExpr expr) | (name, args, expr) <- scs]
+mergeLambdas scs = [(ScDefn name args $ mergeLambdasExpr expr) | (ScDefn name args expr) <- scs]
 
 
 mergeLambdasExpr :: Expr (Name, Level) -> Expr (Name, Level)
@@ -236,14 +236,14 @@ float = foldl collectFloatedSc []
 
 
 collectFloatedSc :: [CoreScDefn] -> ScDefn (Name, Level) -> [CoreScDefn]
-collectFloatedSc scsAcc (name, [], expr) =
-    scsAcc ++ [(name, [], expr')] ++ floatedScs
+collectFloatedSc scsAcc (ScDefn name [] expr) =
+    scsAcc ++ [ScDefn name [] expr'] ++ floatedScs
     where
         (fds, expr') = floatExpr expr
         floatedScs = foldl createScs [] fds
 
         createScs scs (level, isRec, defns) =
-            scs ++ [(name, [], defn) | (name, defn) <- defns]
+            scs ++ [ScDefn name [] defn | (name, defn) <- defns]
 
 
 floatExpr :: Expr (Name, Level) -> (FloatedDefns, CoreExpr)

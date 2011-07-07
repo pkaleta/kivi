@@ -2,6 +2,7 @@ module Common where
 
 
 import Utils
+import Data.String.Utils
 
 
 -- Parser
@@ -19,11 +20,14 @@ data Expr a
 --    | Fatbar (Expr a) (Expr a)
     | EError String
     | ESelect Int Int Name
-    deriving (Show)
+
+
+instance Show a => Show (Expr a) where
+    show expr = showExpr expr
 
 
 type CoreScDefn = ScDefn Name
-type ScDefn a = (Name, [a], Expr a)
+data ScDefn a = ScDefn Name [a] (Expr a)
 type DataType = (Name, [Constructor])
 type Constructor = (Name, Int, Int)
 type CoreExpr = Expr Name
@@ -35,6 +39,10 @@ type CoreProgram = ([DataType], [CoreScDefn])
 type Defn a = (a, Expr a)
 type CoreDefn = Defn Name
 type Name = String
+
+
+instance Show a => Show (ScDefn a) where
+    show sc = showScDefn sc
 
 
 data Pattern = PNum Int
@@ -182,4 +190,46 @@ statGetSteps s = s
 
 statIncSteps :: GmStats -> GmStats
 statIncSteps s = s+1
+
+
+showExpr :: Show a => Expr a -> String
+showExpr = showExpr' 0
+
+
+showExpr' :: Show a => Int -> Expr a -> String
+showExpr' indent (EVar v) = v
+showExpr' indent (ENum n) = show n
+--TODO: retrieve the name of constructor
+showExpr' indent (EConstr t a) = "CONSTR" ++ show t
+showExpr' indent (EAp e1 e2) = "(" ++ showExpr' indent e1 ++ " " ++ showExpr' indent e2 ++ ")"
+showExpr' indent (ELet isRec defns expr) =
+    getIndent indent ++ letKeyword ++ defnsStr ++ "\n" ++ getIndent indent ++ "in\n" ++ showExpr' (indent+1) expr
+    where
+        letKeyword | isRec     = "letrec"
+                   | otherwise = "let"
+        defnsStr = foldl (++) "" ["\n" ++ getIndent (indent+1) ++ show v ++ " = " ++ showExpr' (indent+1) expr | (v, expr) <- defns]
+showExpr' indent (ECaseSimple expr alts) = showExprCase indent "Simple" expr alts
+showExpr' indent (ECaseConstr expr alts) = showExprCase indent "Constr" expr alts
+showExpr' indent (EError msg) = "Error " ++ msg
+showExpr' indent (ESelect r i v) = "Select " ++ show r ++ " " ++ show i ++ " " ++ show v
+
+
+showExprCase :: Show a => Int -> String -> Expr a -> [Alter Int a] -> String
+showExprCase indent t expr alts =
+    getIndent indent ++ "Case" ++ t ++ " " ++ showExpr' indent expr ++ " of" ++ altsStr
+    where
+        altsStr = foldl (++) "" ["\n" ++ getIndent (indent+1) ++ show n ++ " = " ++ showExpr' (indent+1) expr | (n, expr) <- alts]
+
+
+defaultIndent :: String
+defaultIndent = "  "
+
+
+getIndent :: Int -> String
+getIndent n = join "" [defaultIndent | i <- [0..n]]
+
+
+showScDefn :: Show a => ScDefn a -> String
+showScDefn (ScDefn name args expr) =
+    "\n\n********* " ++ name ++ "(" ++ join "," [show arg | arg <- args] ++ ") *********\n" ++ show expr ++ "\n\n"
 

@@ -25,11 +25,11 @@ instance Eq PatternClass where
 mergePatterns :: PatProgram -> PatProgram
 mergePatterns (dts, scs) = (dts, scs')
     where
-        scs' = [(name, defns) | (name, defns) <- Map.toList $ foldl mergePattern Map.empty scs]
+        scs' = [PatScDefn name defns | (name, defns) <- Map.toList $ foldl mergePattern Map.empty scs]
 
 
 mergePattern :: Map Name [Equation] -> PatScDefn -> Map Name [Equation]
-mergePattern scMap (name, defns) = -- it would always contain only one definition
+mergePattern scMap (PatScDefn name defns) = -- it would always contain only one definition
     Map.alter update name scMap
     where
         update Nothing = Just defns
@@ -76,7 +76,7 @@ patternMatch (dts, scs) = (dts, scs')
 
 
 matchSc :: [DataType] -> PatScDefn -> PatScDefn
-matchSc dts (name, eqs) = (name, [(vars, matchEquations ns' dts n varNames eqs def)])
+matchSc dts (PatScDefn name eqs) = (PatScDefn name [(vars, matchEquations ns' dts n varNames eqs def)])
     where
         (patterns, expr) = head eqs
         n = length patterns

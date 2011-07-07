@@ -29,7 +29,9 @@ data AnnExpr' a b = AVar Name
 
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, AnnExpr a b)
-type AnnProgram a b = [(Name, [a], AnnExpr a b)]
+--type AnnProgram a b = [(Name, [a], AnnExpr a b)]
+data AnnScDefn a b = AnnScDefn Name [a] (AnnExpr a b)
+type AnnProgram a b = [AnnScDefn a b]
 
 
 lambdaLift :: CoreProgram -> CoreProgram
@@ -38,7 +40,7 @@ lambdaLift (adts, scs) = (adts, collectScs . rename . abstract . freeVars $ scs)
 
 freeVars :: [CoreScDefn] -> AnnProgram Name (Set Name)
 freeVars [] = []
-freeVars ((name, args, expr) : scs) = (name, args, calcFreeVars (Set.fromList args) expr) : (freeVars scs)
+freeVars ((ScDefn name args expr) : scs) = (AnnScDefn name args $ calcFreeVars (Set.fromList args) expr) : (freeVars scs)
 
 
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
@@ -94,7 +96,7 @@ calcFreeVarsCase constr localVars expr alts = (fvs, constr expr' alts')
 
 
 abstract :: AnnProgram Name (Set Name) -> [CoreScDefn]
-abstract program = [(name, args, abstractExpr expr) | (name, args, expr) <- program]
+abstract program = [ScDefn name args (abstractExpr expr) | AnnScDefn name args expr <- program]
 
 
 abstractExpr :: AnnExpr Name (Set Name) -> CoreExpr
@@ -138,8 +140,8 @@ renameSc :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name))
          -> NameSupply
          -> ScDefn a
          -> (NameSupply, ScDefn a)
-renameSc newNamesFun ns (name, args, expr) =
-    (ns2, (name, args', expr'))
+renameSc newNamesFun ns (ScDefn name args expr) =
+    (ns2, ScDefn name args' expr')
     where
         (ns1, args', mapping) = newNamesFun ns args
         (ns2, expr') = renameExpr newNamesFun mapping ns1 expr
@@ -227,8 +229,8 @@ collectScs scs = foldl collectSc [] scs
 
 
 collectSc :: [CoreScDefn] -> CoreScDefn -> [CoreScDefn]
-collectSc scsAcc (name, args, expr) =
-    [(name, args', expr')] ++ scsAcc ++ scs
+collectSc scsAcc (ScDefn name args expr) =
+    [ScDefn name args' expr'] ++ scsAcc ++ scs
     where
         (args', (scs, expr')) = case expr of
                                     (ELet isRec [(scName, (ELam lamArgs lamExpr))] letBody) ->
@@ -253,7 +255,7 @@ collectExpr (ELet isRec defns expr) =
         (defnsScs, defns') = foldl collectDef ([], []) defns
         (scDefns, varDefns) = List.partition isSc defns'
         -- supercombinators declared locally in defns as lambda expressions
-        localScs = [(name, args, expr) | (name, ELam args expr) <- scDefns]
+        localScs = [ScDefn name args expr | (name, ELam args expr) <- scDefns]
         (exprScs, expr') = collectExpr expr
 
         -- is supercombinator predicate
@@ -263,8 +265,8 @@ collectExpr (ELet isRec defns expr) =
         -- helper to extract supercombinators nested in definitions
         collectDef (scsAcc, defnsAcc) (name, expr) =
             case collectExpr expr of
-                ([(scName1, scArgs, scExpr)], (EVar scName2)) | scName1 == scName2 ->
-                    (scsAcc ++ [(name, scArgs, scExpr)], defnsAcc)
+                ([ScDefn scName1 scArgs scExpr], (EVar scName2)) | scName1 == scName2 ->
+                    (scsAcc ++ [ScDefn name scArgs scExpr], defnsAcc)
                 (scs, expr') ->
                     (scsAcc ++ scs, (name, expr') : defnsAcc)
 

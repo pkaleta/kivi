@@ -88,7 +88,7 @@ tagADT (mapping, curTag) (dtName, cs) =
 
 
 tagSc :: NameConstrMapping -> PatScDefn -> PatScDefn
-tagSc mapping (name, eqs) = (name, [tagEq mapping eq | eq <- eqs])
+tagSc mapping (PatScDefn name eqs) = (PatScDefn name [tagEq mapping eq | eq <- eqs])
 
 
 tagEq :: NameConstrMapping -> Equation -> Equation

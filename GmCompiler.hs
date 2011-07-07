@@ -15,18 +15,18 @@ type GmEnvironment = Assoc Name Int
 
 
 primitiveScs :: [CoreScDefn]
-primitiveScs = [("+", ["x", "y"], (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
-                ("-", ["x", "y"], (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
-                ("*", ["x", "y"], (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
-                ("/", ["x", "y"], (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
-                ("negate", ["x"], (EAp (EVar "negate") (EVar "x"))),
-                ("==", ["x", "y"], (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
-                ("!=", ["x", "y"], (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
-                ("<", ["x", "y"], (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
-                ("<=", ["x", "y"], (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
-                (">", ["x", "y"], (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
-                (">=", ["x", "y"], (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
-                ("if", ["c", "t", "f"], (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
+primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
+                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
+                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
+                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
+                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
+                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
+                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
+                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
+                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
+                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+                (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
 
 
 builtinDyadicBool :: Assoc Name Instruction
@@ -66,9 +66,9 @@ getCompiledCode program@(adts, scs) =
             where
                 (NGlobal arity code) = hLookup heap addr
 
-        find n1 (sc@(n2, args, expr) : rest) | n1 == n2  = sc
-                                             | otherwise = find n1 rest
-        find n1 [] = ("xxx", [], (EVar "x"))
+        find n1 (sc@(ScDefn n2 args expr) : rest) | n1 == n2  = sc
+                                                  | otherwise = find n1 rest
+        find n1 [] = (ScDefn "unnamed" [] (EVar "x"))
 
 
 compile :: CoreProgram -> GmState
@@ -95,7 +95,7 @@ allocateSc heap (name, argc, code) = (heap', (name, addr))
 
 
 compileSc :: CoreScDefn -> GmCompiledSc
-compileSc (name, args, expr) =
+compileSc (ScDefn name args expr) =
     (name, n, compileR n expr $ zip args [0..])
     where
         n = length args
