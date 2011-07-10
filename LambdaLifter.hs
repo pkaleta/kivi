@@ -10,6 +10,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import List
 import Debug.Trace
+import Data.String.Utils
 
 
 type AnnExpr a b = (b, AnnExpr' a b)
@@ -29,9 +30,12 @@ data AnnExpr' a b = AVar Name
 
 type AnnDefn a b = (a, AnnExpr a b)
 type AnnAlt a b = (Int, AnnExpr a b)
---type AnnProgram a b = [(Name, [a], AnnExpr a b)]
 data AnnScDefn a b = AnnScDefn Name [a] (AnnExpr a b)
 type AnnProgram a b = [AnnScDefn a b]
+
+
+instance (Show a, Show b) => Show (AnnScDefn a b) where
+    show = showAnnScDefn
 
 
 lambdaLift :: CoreProgram -> CoreProgram
@@ -299,4 +303,9 @@ collectExprCase constr expr alts =
 
 freeVarsOf :: AnnExpr Name (Set Name) -> Set Name
 freeVarsOf (fvs, _) = fvs
+
+
+showAnnScDefn :: Show a => Show b => AnnScDefn a b -> String
+showAnnScDefn (AnnScDefn name args expr) =
+    "\n\n********* " ++ name ++ "(" ++ join "," [show arg | arg <- args] ++ ") *********\n" ++ show expr ++ "\n\n"
 

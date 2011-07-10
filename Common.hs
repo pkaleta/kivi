@@ -13,7 +13,7 @@ data Expr a
     | EConstr Int Int                       -- constructor (tag, arity)
     | EAp (Expr a) (Expr a)                 -- applications
     | ELet IsRec [Defn a] (Expr a)          -- let(rec) expressions (is recursive, definitions, body)
-    | ECase (Expr a) [Alter Pattern a]              -- case expression (expression, alternatives)
+    | ECase (Expr a) [Alter Pattern a]      -- case expression (expression, alternatives)
     | ECaseSimple (Expr a) [Alter Int a]
     | ECaseConstr (Expr a) [Alter Int a]
     | ELam [a] (Expr a)                     -- lambda abstractions
@@ -23,7 +23,7 @@ data Expr a
 
 
 instance Show a => Show (Expr a) where
-    show expr = showExpr expr
+    show = showExpr
 
 
 type CoreScDefn = ScDefn Name
@@ -42,7 +42,7 @@ type Name = String
 
 
 instance Show a => Show (ScDefn a) where
-    show sc = showScDefn sc
+    show = showScDefn
 
 
 data Pattern = PNum Int
@@ -208,6 +208,11 @@ showExpr' indent (ELet isRec defns expr) =
         letKeyword | isRec     = "letrec"
                    | otherwise = "let"
         defnsStr = foldl (++) "" ["\n" ++ getIndent (indent+1) ++ show v ++ " = " ++ showExpr' (indent+1) expr | (v, expr) <- defns]
+
+showExpr' indent (ELam args expr) =
+    "lambda " ++ argsStr ++ " . " ++ showExpr' indent expr
+    where
+        argsStr = join "," [show v | v <- args]
 showExpr' indent (ECaseSimple expr alts) = showExprCase indent "Simple" expr alts
 showExpr' indent (ECaseConstr expr alts) = showExprCase indent "Constr" expr alts
 showExpr' indent (EError msg) = "Error " ++ msg

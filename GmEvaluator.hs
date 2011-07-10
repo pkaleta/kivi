@@ -33,7 +33,7 @@ import LambdaCalculusTransformer
 --runD = show . analyseDeps . parse
 
 runTest :: String -> CoreProgram
-runTest = lambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
+runTest = lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
 
 run :: String -> String
 run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse

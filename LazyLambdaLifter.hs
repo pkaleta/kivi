@@ -197,7 +197,7 @@ identifyMFEsExpr1Case constr level expr exprLevel alts =
     constr expr' alts'
     where
         expr' = identifyMFEsExpr level expr
-        alts' = [(tag, identifyMFEsExpr level body) | (tag, body@(bodyLevel, _)) <- alts]
+        alts' = [(tag, identifyMFEsExpr level body) | (tag, body) <- alts]
 
 
 renameL :: [ScDefn (Name, Level)] -> [ScDefn (Name, Level)]
@@ -254,8 +254,7 @@ floatExpr (EAp e1 e2) = (fds1 ++ fds2, EAp e1' e2')
     where
         (fds1, e1') = floatExpr e1
         (fds2, e2') = floatExpr e2
-floatExpr (ELam args expr) =
-    (outerFds, ELam args' $ wrap innerFds expr')
+floatExpr (ELam args expr) = (outerFds, ELam args' $ wrap innerFds expr')
     where
         args' = [arg | (arg, level) <- args]
         (arg, curLevel) = head args
@@ -270,8 +269,7 @@ floatExpr (ELam args expr) =
             foldr wrapDefn expr floatedDefns
             where
                 wrapDefn (level, isRec, defns) expr = ELet isRec defns expr
-floatExpr (ELet isRec defns expr) =
-    (outerFds, expr')
+floatExpr (ELet isRec defns expr) = (outerFds, expr')
     where
         outerFds = defnsFds ++ [localFd] ++ exprFds
         (exprFds, expr') = floatExpr expr
@@ -293,8 +291,7 @@ floatExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr)
               -> Expr (Name, Level)
               -> [Alter Int (Name, Level)]
               -> (FloatedDefns, Expr Name)
-floatExprCase constr expr alts =
-    (exprFds ++ altsFds, constr expr' alts')
+floatExprCase constr expr alts = (exprFds ++ altsFds, constr expr' alts')
     where
         (exprFds, expr') = floatExpr expr
 

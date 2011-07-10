@@ -29,6 +29,22 @@ primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y
                 (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
 
 
+selFunName :: Int -> Int -> String
+selFunName r i = "select-" ++ show r ++ "-" ++ show i
+
+
+precompiledScs :: [GmCompiledSc]
+precompiledScs = foldl genSelFuns [] [0..5]
+
+
+genSelFuns :: [GmCompiledSc] -> Int -> [GmCompiledSc]
+genSelFuns acc r = acc ++ foldl (genSelFun r) [] [0..r-1]
+
+
+genSelFun :: Int -> [GmCompiledSc] -> Int -> [GmCompiledSc]
+genSelFun r acc i = (selFunName r i, 1, [Push 0, Eval, Select r i, Update 1, Pop 1, Unwind]) : acc
+
+
 builtinDyadicBool :: Assoc Name Instruction
 builtinDyadicBool = [("==", Eq),
                      ("!=", Ne),
@@ -83,7 +99,7 @@ initialCode = [Pushglobal "main", Eval, Print]
 
 buildInitialHeap :: [CoreScDefn] -> (GmHeap, GmGlobals)
 buildInitialHeap program =
-    mapAccumL allocateSc hInitial compiled
+    mapAccumL allocateSc hInitial $ compiled ++ precompiledScs
     where
         compiled = map compileSc $ preludeDefs ++ program ++ primitiveScs
 
@@ -187,8 +203,8 @@ compileC (EAp e1 e2) env =
     [Mkap]
 compileC (ESelect r i v) env =
     case aHasKey env v of
-        True -> [Push $ aLookup env v $ error "This cannot happen", Eval, Select r i]
-        False -> [Pushglobal v, Eval, Select r i]
+        True -> [Push $ aLookup env v $ error "This cannot happen", Pushglobal $ selFunName r i, Mkap]
+        False -> [Pushglobal v, Pushglobal $ selFunName r i, Mkap]
 compileC (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileC defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileC defs body env
 compileC (ECaseSimple expr alts) env =

@@ -43,11 +43,11 @@ transformLet' ns adts (ELet isRec defns expr) =
 transformLet' ns adts expr = (ns, expr)
 
 
-isRefutable :: Pattern -> Bool
-isRefutable (PVar v) = False
-isRefutable (PConstr tag arity args) =
-    foldl (||) False [isRefutable arg | arg <- args]
-isRefutable other = True
+isRefutable :: [DataType] -> Pattern -> Bool
+isRefutable adts (PVar v) = False
+isRefutable adts (PConstr tag arity args) =
+    ((length $ constructors tag adts) > 1) || (foldl (||) False [isRefutable adts arg | arg <- args])
+isRefutable adts other = True
 
 
 conformalityTransform :: [DataType] -> (NameSupply, Expr Pattern) -> (NameSupply, Expr Pattern)
@@ -58,7 +58,7 @@ conformalityTransform adts (ns, ELet isRec defns expr) = (ns', ELet isRec defns'
 
 conformalityTransformDefn :: [DataType] -> NameSupply -> Defn Pattern -> (NameSupply, Defn Pattern)
 conformalityTransformDefn adts ns defn@(pattern, expr) =
-        case isRefutable pattern of
+        case isRefutable adts pattern of
             True -> (ns', (pattern', expr'))
                 where
                     pattern' = getTuplePattern adts pattern
