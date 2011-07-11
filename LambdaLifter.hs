@@ -62,18 +62,19 @@ calcFreeVars localVars (ELam args expr) = (Set.difference fvs argsSet, ALam args
 calcFreeVars localVars (ELet isRec defns expr) =
     (Set.union bodyFvs defnsFvs, ALet isRec defns' expr')
     where
-        binders = Set.fromList $ bindersOf defns
-        exprLvs = Set.union binders localVars
+        binders = bindersOf defns
+        binderSet = Set.fromList $ binders
+        exprLvs = Set.union binderSet localVars
         rhsLvs | isRec = exprLvs
                | otherwise = localVars
         -- annotated stuff
         rhss' = map (calcFreeVars rhsLvs) $ rhssOf defns
-        defns' = zip (Set.toList binders) rhss'
+        defns' = zip binders rhss'
         expr' = calcFreeVars exprLvs expr
         rhssFvs = foldl Set.union Set.empty (map freeVarsOf rhss')
-        defnsFvs | isRec = Set.difference rhssFvs binders
+        defnsFvs | isRec = Set.difference rhssFvs binderSet
                  | otherwise = rhssFvs
-        bodyFvs = Set.difference (freeVarsOf expr') binders
+        bodyFvs = Set.difference (freeVarsOf expr') binderSet
 calcFreeVars localVars (ECaseSimple expr alts) = calcFreeVarsCase ACaseSimple localVars expr alts
 calcFreeVars localVars (ECaseConstr expr alts) = calcFreeVarsCase ACaseConstr localVars expr alts
 calcFreeVars localVars (EConstr t n) =

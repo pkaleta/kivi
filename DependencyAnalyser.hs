@@ -45,7 +45,9 @@ scc ins outs vs = topSortedSccs
 
 
 analyseDeps :: CoreProgram -> CoreProgram
-analyseDeps (adts, scs) = (adts, [ScDefn name args (analyseExpr expr) | (AnnScDefn name args expr) <- freeVars scs])
+analyseDeps (adts, scs) = (adts, scs')
+    where
+        scs' = [ScDefn name args (analyseExpr expr) | (AnnScDefn name args expr) <- freeVars scs]
 
 
 analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
