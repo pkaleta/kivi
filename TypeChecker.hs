@@ -6,6 +6,7 @@ import Data.Map as Map
 import Data.Set as Set
 import NameSupply
 import Data.List
+import Debug.Trace
 
 
 type TypeVarName = String
@@ -40,6 +41,7 @@ data TypedExpr' a = TVar Name
 type TypedDefn a = (a, TypedExpr a)
 type TypedAlt a = (Int, TypedExpr a)
 data TypedScDefn a = TypedScDefn Name [a] (TypedExpr a)
+    deriving Show
 type TypedProgram a = ([DataType], [TypedScDefn a])
 
 
@@ -55,7 +57,7 @@ showTypeExpr (TypeOp ton args) =
 
 
 arrow :: TypeExpr -> TypeExpr -> TypeExpr
-arrow t1 t2 = TypeOp "arrow" [t1, t2]
+arrow t1 t2 = TypeOp "->" [t1, t2]
 
 
 int :: TypeExpr
@@ -94,14 +96,14 @@ typeCheckExpr :: NameSupply
 typeCheckExpr ns env nonGeneric (EVar v) = ((ns', env, nonGeneric), (typeExpr, TVar v))
     where (ns', typeExpr) = getType ns env nonGeneric v
 typeCheckExpr ns env nonGeneric (ENum n) = ((ns, env, nonGeneric), (int, TNum n))
-typeCheckExpr ns env nonGeneric (EAp e1 e2) = ((ns2, env1, nonGeneric1), (resType', TAp (funType', e1') (argType, e2')))
+typeCheckExpr ns env nonGeneric (EAp e1 e2) = ((ns2, env1, nonGeneric1), (resType', TAp (funType', e1') (argType', e2')))
     where
         ((ns0, env0, nonGeneric0), (funType, e1')) = typeCheckExpr ns env nonGeneric e1
         ((ns1, env1, nonGeneric1), (argType, e2')) = typeCheckExpr ns0 env0 nonGeneric0 e2
         (ns2, resType) = newTypeVariable ns
         (TypeOp ton [argType', resType'], funType') = unify (argType `arrow` resType) funType
 -- Here we assume that lambdas has already been split and contain one argument only
-typeCheckExpr ns env nonGeneric (ELam [v] expr) = ((ns2, env2, nonGeneric2), (resType, TLam [v] typedExpr))
+typeCheckExpr ns env nonGeneric lambda@(ELam [v] expr) = ((ns2, env2, nonGeneric2), (resType, TLam [v] typedExpr))
     where
         (ns1, argType@(TypeVar tvn inst)) = newTypeVariable ns
         env1 = Map.insert v argType env
@@ -131,7 +133,7 @@ typeCheckLetrec :: NameSupply
 typeCheckLetrec ns env nonGeneric (ELet True defns expr) = (accs, (exprType, TLet True defns' typedExpr))
     where
         (ns1, env1, nonGeneric1) = foldl collectDefn (ns, env, nonGeneric) defns
-        ((ns2, env2, nonGeneric2), defns') = mapAccumL typeCheckDefn (ns1, env1, nonGeneric1) defns
+        ((ns2, env2, nonGeneric2), defns') = mapAccumL typeCheckRecDefn (ns1, env1, nonGeneric1) defns
         (accs, typedExpr@(exprType, expr')) = typeCheckExpr ns2 env2 nonGeneric2 expr
 
         collectDefn (ns, env, nonGeneric) (v, defn) = (ns', env', nonGeneric')
@@ -147,9 +149,17 @@ typeCheckDefn :: (NameSupply, TypeEnv, NonGenericSet)
 typeCheckDefn (ns, env, nonGeneric) (v, defn) = ((ns', env2, nonGeneric'), (v, typedDefn))
     where
         ((ns', env1, nonGeneric'), typedDefn@(defnType, defn')) = typeCheckExpr ns env nonGeneric defn
+        env2 = Map.insert v defnType env1
+
+
+typeCheckRecDefn :: (NameSupply, TypeEnv, NonGenericSet)
+                 -> CoreDefn
+                 -> ((NameSupply, TypeEnv, NonGenericSet), TypedDefn Name)
+typeCheckRecDefn (ns, env, nonGeneric) (v, defn) = ((ns', env2, nonGeneric'), (v, typedDefn))
+    where
+        ((ns', env1, nonGeneric'), typedDefn@(defnType, defn')) = typeCheckExpr ns env nonGeneric defn
 
         (Just varType) = Map.lookup v env
-        -- TODO: we might not need unifying in case of let expressions
         (varType', defnType') = unify varType defnType
 
         env2 = Map.insert v varType' env1
@@ -168,7 +178,7 @@ getType ns env nonGeneric v =
 
 fresh :: NameSupply -> NonGenericSet -> TypeExpr -> (NameSupply, TypeExpr)
 fresh ns nonGeneric te = (ns', te')
-    where ((ns', env, nonGeneric), te') = fresh' (ns, Map.empty, nonGeneric) te
+    where ((ns', env, _), te') = fresh' (ns, Map.empty, nonGeneric) te
 
 
 fresh' :: (NameSupply, TypeEnv, NonGenericSet)
@@ -176,8 +186,8 @@ fresh' :: (NameSupply, TypeEnv, NonGenericSet)
        -> ((NameSupply, TypeEnv, NonGenericSet), TypeExpr)
 fresh' (ns, env, nonGeneric) te =
     case prune te of
-        typeVar@(TypeVar tvn inst)   -> freshVar ns env nonGeneric typeVar
-        typeOp@(TypeOp ton args) -> freshOper ns env nonGeneric typeOp
+        typeVar@(TypeVar tvn inst) -> freshVar ns env nonGeneric typeVar
+        typeOp@(TypeOp ton args)   -> freshOper ns env nonGeneric typeOp
 
 
 freshVar :: NameSupply
@@ -219,23 +229,23 @@ newTypeVariable ns = (ns', TypeVar name Nothing)
 prune :: TypeExpr -> TypeExpr
 prune typeVar@(TypeVar v (Just inst)) = prune inst
 prune typeVar@(TypeVar v Nothing)     = typeVar
-prune typeOp@(TypeOp op args)     = typeOp
+prune typeOp@(TypeOp op args)         = typeOp
 
 
 unify :: TypeExpr -> TypeExpr -> (TypeExpr, TypeExpr)
-unify te1 te2 = unifyPruned (prune te1) (prune te2)
+unify te1 te2 = unify' (prune te1) (prune te2)
 
 
-unifyPruned :: TypeExpr -> TypeExpr -> (TypeExpr, TypeExpr)
-unifyPruned tv@(TypeVar tvn inst) te | occursInType tv te = error "Recursive unification"
-                                     | otherwise          = (TypeVar tvn $ Just te, te)
-unifyPruned to@(TypeOp ton args) tv@(TypeVar tvn inst) = unifyPruned tv to
-unifyPruned to1@(TypeOp n1 as1) to2@(TypeOp n2 as2) =
+unify' :: TypeExpr -> TypeExpr -> (TypeExpr, TypeExpr)
+unify' tv@(TypeVar tvn inst) te | occursInType tv te = error "Recursive unification"
+                                | otherwise          = (TypeVar tvn $ Just te, te)
+unify' to@(TypeOp ton args) tv@(TypeVar tvn inst) = unify' tv to
+unify' to1@(TypeOp n1 as1) to2@(TypeOp n2 as2) =
     case n1 /= n2 || length as1 /= length as2 of
         True -> error $ "Type mismatch: " ++ show to1 ++ " and " ++ show to2
         False -> (TypeOp n1 a1', TypeOp n2 a2')
             where
-                (a1', a2') = unzip [unifyPruned a1 a2 | (a1, a2) <- zip as1 as2]
+                (a1', a2') = unzip [unify' a1 a2 | (a1, a2) <- zip as1 as2]
 
 
 occursInType :: TypeExpr -> TypeExpr -> Bool
