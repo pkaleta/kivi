@@ -17,21 +17,8 @@ import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
---import DependencyAnalyser
 --import Gc
 
-
---run :: [Char] -> [Char]
---run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . parse
---
---runS :: [Char] -> [Char]
---runS = show . lambdaLift . parse
---
---runF :: [Char] -> [Char]
---runF = show . lambdaLift . lazyLambdaLift . parse
---
---runD :: [Char] -> [Char]
---runD = show . analyseDeps . parse
 
 --runTest :: String -> CoreProgram
 runTest = --lambdaLift . lazyLambdaLift . analyseDeps . 
