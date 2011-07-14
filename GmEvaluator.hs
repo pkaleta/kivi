@@ -16,6 +16,7 @@ import LambdaLifter
 import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
+import TypeChecker
 --import DependencyAnalyser
 --import Gc
 
@@ -32,8 +33,9 @@ import LambdaCalculusTransformer
 --runD :: [Char] -> [Char]
 --runD = show . analyseDeps . parse
 
-runTest :: String -> CoreProgram
-runTest = lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
+--runTest :: String -> CoreProgram
+runTest = --lambdaLift . lazyLambdaLift . analyseDeps . 
+    typeCheck . transformToLambdaCalculus . mergePatterns . tag . parse
 
 run :: String -> String
 run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse

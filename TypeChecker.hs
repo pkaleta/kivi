@@ -14,15 +14,20 @@ type TypeEnv = Map Name TypeExpr
 type TypeInstanceEnv = Map TypeVarName TypeExpr
 type NonGenericSet = Set TypeVarName
 type State = (NameSupply, TypeInstanceEnv, TypeEnv, NonGenericSet)
-data TypeExpr = TypeVar TypeVarName | TypeOp String [TypeExpr]
+data TypeExpr = TypeVar TypeVarName (Maybe TypeExpr) | TypeOp String [TypeExpr]
 
 
 instance Eq TypeExpr where
-    (TypeVar tvn) == (TypeVar tvn') = tvn == tvn'
+    (TypeVar tvn inst) == (TypeVar tvn' inst') = tvn == tvn' && inst == inst'
     (TypeOp ton args) == (TypeOp ton' args') = ton == ton' && args == args'
 
 
+instance Show TypeExpr where
+    show = showTypeExpr
+
+
 type TypedExpr a = (TypeExpr, TypedExpr' a)
+
 
 data TypedExpr' a = TVar Name
                   | TNum Int
@@ -35,24 +40,37 @@ data TypedExpr' a = TVar Name
                   | TLam [a] (TypedExpr a)
                   | TSelect Int Int a
                   | TError String
+    deriving Show
+
 
 type TypedDefn a = (a, TypedExpr a)
 type TypedAlt a = (Int, TypedExpr a)
 data TypedScDefn a = TypedScDefn Name [a] (TypedExpr a)
+    deriving Show
 type TypedProgram a = ([DataType], [TypedScDefn a])
 
 
-showTypeExpr :: State -> TypeExpr -> String
-showTypeExpr state (TypeVar tvn) =
+showTypeExpr :: TypeExpr -> String
+showTypeExpr (TypeVar tvn inst) =
+    case inst of
+        Just te -> showTypeExpr te
+        Nothing -> tvn
+showTypeExpr (TypeOp ton args) =
+    case args of
+        []       -> ton
+        [t1, t2] -> showTypeExpr t1 ++ " " ++ ton ++ " " ++ showTypeExpr t2
+
+showTypeExprDbg :: State -> TypeExpr -> String
+showTypeExprDbg state (TypeVar tvn inst) =
     case Map.lookup tvn instEnv of
-        Just te -> showTypeExpr state te
+        Just te -> showTypeExprDbg state te
         Nothing -> tvn
     where
         instEnv = getInstanceEnv state
-showTypeExpr state (TypeOp ton args) =
+showTypeExprDbg state (TypeOp ton args) =
     case args of
         []       -> ton
-        [t1, t2] -> showTypeExpr state t1 ++ " " ++ ton ++ " " ++ showTypeExpr state t2
+        [t1, t2] -> showTypeExprDbg state t1 ++ " " ++ ton ++ " " ++ showTypeExprDbg state t2
 
 
 arrow :: TypeExpr -> TypeExpr -> TypeExpr
@@ -75,13 +93,52 @@ list :: TypeExpr -> TypeExpr
 list t = TypeOp "list" [t]
 
 
+updateInstances :: State -> [TypedScDefn Name] -> [TypedScDefn Name]
+updateInstances state scs = [TypedScDefn name args $ updateExpr state expr | (TypedScDefn name args expr) <- scs]
+
+
+updateType :: State -> TypeExpr -> TypeExpr
+updateType state (TypeVar tvn Nothing) = TypeVar tvn $ Map.lookup tvn $ getInstanceEnv state
+updateType state (TypeOp ton args) = TypeOp ton [updateType state arg | arg <- args]
+
+
+updateExpr :: State -> TypedExpr Name -> TypedExpr Name
+updateExpr state (te, TVar v) = (updateType state te, TVar v)
+updateExpr state (te, TNum n) = (updateType state te, TNum n)
+updateExpr state (te, TAp e1 e2) = (updateType state te, TAp e1' e2')
+    where
+        e1' = updateExpr state e1
+        e2' = updateExpr state e2
+updateExpr state (te, TLet isRec defns expr) = (updateType state te, TLet isRec defns' expr')
+    where
+        defns' = [(name, updateExpr state expr) | (name, expr) <- defns]
+        expr' = updateExpr state expr
+updateExpr state (te, TCaseSimple expr alts) = (updateType state te, updateCase state TCaseSimple expr alts)
+updateExpr state (te, TCaseConstr expr alts) = (updateType state te, updateCase state TCaseConstr expr alts)
+updateExpr state (te, TLam args expr) = (updateType state te, TLam args expr')
+    where
+        expr' = updateExpr state expr
+--updateExpr state expr = expr
+
+
+updateCase :: State
+           ->(TypedExpr Name -> [TypedAlt Name] -> TypedExpr' Name)
+           -> TypedExpr Name
+           -> [TypedAlt Name]
+           -> TypedExpr' Name
+updateCase state constr expr alts = constr expr' alts'
+    where
+        expr' = updateExpr state expr
+        alts' = [(t, updateExpr state expr) | (t, expr) <- alts]
+
+
 typeCheck :: CoreProgram -> TypedProgram Name
-typeCheck (adts, scs) = (adts, scs')
+typeCheck (adts, scs) = (adts, updateInstances state scs')
     where (state, scs') = mapAccumL typeCheckSc initialState scs
 
 
 typeCheckSc :: State -> CoreScDefn -> (State, TypedScDefn Name)
-typeCheckSc state (ScDefn name args expr) = (state, TypedScDefn name args expr')
+typeCheckSc state (ScDefn name args expr) = (state', TypedScDefn name args expr')
     where (state', expr') = typeCheckExpr state expr
 
 
@@ -98,7 +155,7 @@ typeCheckExpr state (EAp e1 e2) = (state4, (resType', TAp (funType', e1') (argTy
 -- Here we assume that lambdas has already been split and contain one argument only
 typeCheckExpr state lambda@(ELam [v] expr) = (state4, (resType, TLam [v] typedExpr))
     where
-        (state1, argType@(TypeVar tvn)) = newTypeVariable state
+        (state1, argType@(TypeVar tvn Nothing)) = newTypeVariable state
         state2 = putEnv state1 $ Map.insert v argType $ getEnv state1
         state3 = putNonGeneric state2 $ Set.insert tvn $ getNonGeneric state2
         (state4, typedExpr@(exprType, expr')) = typeCheckExpr state3 expr
@@ -123,7 +180,7 @@ typeCheckLetrec state (ELet True defns expr) = (state3, (exprType, TLet True def
 
         collectDefn state (v, defn) = state3
             where
-                (state1, tv@(TypeVar tvn)) = newTypeVariable state
+                (state1, tv@(TypeVar tvn Nothing)) = newTypeVariable state
                 state2 = putEnv state1 $ Map.insert v tv $ getEnv state1
                 state3 = putNonGeneric state2 $ Set.insert tvn $ getNonGeneric state2
 
@@ -162,12 +219,12 @@ fresh state te = fresh' (putEnv state initialTypeEnv) te
 fresh' :: State -> TypeExpr -> (State, TypeExpr)
 fresh' state te =
     case prune state te of
-        (state', typeVar@(TypeVar tvn))    -> freshVar state' typeVar
+        (state', typeVar@(TypeVar tvn Nothing))    -> freshVar state' typeVar
         (state', typeOp@(TypeOp ton args)) -> freshOper state' typeOp
 
 
 freshVar :: State -> TypeExpr -> (State, TypeExpr)
-freshVar state tv@(TypeVar tvn) =
+freshVar state tv@(TypeVar tvn Nothing) =
     case isGeneric state tvn of
         True  -> (state2, tv')
             where
@@ -187,14 +244,14 @@ isGeneric state tvn = not $ Set.member tvn $ getNonGeneric state
 
 
 newTypeVariable :: State -> (State, TypeExpr)
-newTypeVariable state = (state', TypeVar name)
+newTypeVariable state = (state', TypeVar name Nothing)
     where
         (ns', name) = getName (getNameSupply state) "t"
         state' = putNameSupply state ns'
 
 
 prune :: State -> TypeExpr -> (State, TypeExpr)
-prune state typeVar@(TypeVar v) =
+prune state typeVar@(TypeVar v Nothing) =
     case Map.lookup v instEnv of
         (Just inst) -> (state2, inst')
             where
@@ -214,7 +271,7 @@ unify state te1 te2 = unify' state2 te1' te2'
 
 
 unify' :: State -> TypeExpr -> TypeExpr -> (State, TypeExpr, TypeExpr)
-unify' state tv@(TypeVar tvn) te =
+unify' state tv@(TypeVar tvn Nothing) te =
     case occurs of
         True -> error "Recursive unification"
         False -> (state2, tv, te)
@@ -222,10 +279,10 @@ unify' state tv@(TypeVar tvn) te =
                 state2 = putInstanceEnv state1 $ Map.insert tvn te $ getInstanceEnv state1
     where
         (state1, occurs) = occursInType state tv te
-unify' state to@(TypeOp ton args) tv@(TypeVar tvn) = unify' state tv to
+unify' state to@(TypeOp ton args) tv@(TypeVar tvn Nothing) = unify' state tv to
 unify' state to1@(TypeOp n1 as1) to2@(TypeOp n2 as2) =
     case n1 /= n2 || length as1 /= length as2 of
-        True -> error $ "Type mismatch: " ++ showTypeExpr state to1 ++ " and " ++ showTypeExpr state to2
+        True -> error $ "Type mismatch: " ++ showTypeExprDbg state to1 ++ " and " ++ showTypeExprDbg state to2
         False -> (state', TypeOp n1 a1', TypeOp n2 a2')
             where
                 (state', a1', a2') = foldl unifyArgs (state, [], []) $ zip as1 as2
@@ -241,17 +298,17 @@ unifyArgs (state, tacc1, tacc2) (te1, te2) =
 
 
 occursInType :: State -> TypeExpr -> TypeExpr -> (State, Bool)
-occursInType state tv@(TypeVar tvn) te =
+occursInType state tv@(TypeVar tvn Nothing) te =
     case pruned of
-        TypeVar tvn' | tvn == tvn' -> (state', True)
-        TypeOp ton args            -> occursInArgs state' tv args
-        _                          -> (state', False)
+        TypeVar tvn' Nothing | tvn == tvn' -> (state', True)
+        TypeOp ton args                     -> occursInArgs state' tv args
+        _                                   -> (state', False)
     where
         (state', pruned) = prune state te
 
 
 occursInArgs :: State -> TypeExpr -> [TypeExpr] -> (State, Bool)
-occursInArgs state tv@(TypeVar tvn) typeExprs = foldl occursInArg (state, False) typeExprs
+occursInArgs state tv@(TypeVar tvn Nothing) typeExprs = foldl occursInArg (state, False) typeExprs
     where
         occursInArg (state, occurs) te = (state', occurs || oc)
             where
