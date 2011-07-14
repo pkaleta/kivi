@@ -321,8 +321,15 @@ initialTypeInstanceEnv :: TypeInstanceEnv
 initialTypeInstanceEnv = Map.empty
 
 
+binaryArithOp :: TypeExpr
+binaryArithOp = int `arrow` int `arrow` int
+
+
 initialTypeEnv :: TypeEnv
-initialTypeEnv = Map.empty
+initialTypeEnv = Map.fromList [("+", binaryArithOp),
+                               ("-", binaryArithOp),
+                               ("*", binaryArithOp),
+                               ("/", binaryArithOp)]
 
 
 initialNonGenericSet :: NonGenericSet
