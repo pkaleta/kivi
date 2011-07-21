@@ -33,19 +33,21 @@ templatesPath :: String
 templatesPath = "templates/"
 
 
---genCode :: String -> StringTemplate String
-genCode = genIR . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
-
-
-genIR :: CoreProgram -> IO (StringTemplate String)
-genIR program@(adts, scs) = do
-    let state = compile program
-    let globals = getGlobals state
-    let heap = getHeap state
+genCode :: String -> IO (StringTemplate String)
+genCode program = do
     templates <- directoryGroup templatesPath :: IO (STGroup String)
-    let Just t = getStringTemplate "program" templates
-    let scsTemplates = genScsIR heap templates globals
-    return $ setAttribute "scs" (renderTemplates scsTemplates) t
+    return $ (genIR templates) . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse $ program
+
+
+genIR :: STGroup String -> CoreProgram -> StringTemplate String
+genIR templates program@(adts, scs) =
+    setAttribute "scs" (renderTemplates scsTemplates) t
+    where
+        state = compile program
+        globals = getGlobals state
+        heap = getHeap state
+        Just t = getStringTemplate "program" templates
+        scsTemplates = genScsIR heap templates globals
 
 
 genScsIR :: GmHeap -> STGroup String -> Assoc Name Addr -> [StringTemplate String]
