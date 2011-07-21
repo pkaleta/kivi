@@ -1,10 +1,8 @@
 module GmEvaluator where
 
---import Lexer
 import Parser
 import Utils
 import List
---import Core
 import Common
 import Debug.Trace
 import GmCompiler
@@ -17,7 +15,6 @@ import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
---import Gc
 
 
 --runTest :: String -> CoreProgram
