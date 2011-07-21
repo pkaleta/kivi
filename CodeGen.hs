@@ -78,9 +78,7 @@ collectInstrIR templates (stack, ir) (Update n) = (stack', ir ++ [template'])
         (SNum n : stack') = stack
         template' = setManyAttrib [("intTag", show intTag), ("value", show n)] template
         Just template = getStringTemplate "update" templates
-collectInstrIR templates (stack, ir) (Pop n) = (stack, ir ++ [template])
-    where
-        Just template = getStringTemplate "pop" templates
+collectInstrIR templates acc@(stack, ir) (Pop n) = acc
 collectInstrIR templates (stack, ir) (Unwind) =  (stack, ir ++ [template])
     where
         Just template = getStringTemplate "unwind" templates
