@@ -33,14 +33,21 @@ templatesPath :: String
 templatesPath = "templates/"
 
 
-genCode :: String -> IO (StringTemplate String)
-genCode program = do
+saveIR :: IO (StringTemplate String) -> IO ()
+saveIR ir = do
+    content <- ir
+    let filePath = "codegen/test.ll"
+    writeFile filePath $ render content
+
+
+genIR :: String -> IO (StringTemplate String)
+genIR program = do
     templates <- directoryGroup templatesPath :: IO (STGroup String)
-    return $ (genIR templates) . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse $ program
+    return $ (genProgramIR templates) . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse $ program
 
 
-genIR :: STGroup String -> CoreProgram -> StringTemplate String
-genIR templates program@(adts, scs) =
+genProgramIR :: STGroup String -> CoreProgram -> StringTemplate String
+genProgramIR templates program@(adts, scs) =
     setAttribute "scs" (renderTemplates scsTemplates) t
     where
         state = compile program
@@ -94,41 +101,3 @@ collectInstrIR templates acc@(stack, ir) _ = acc
 renderTemplates :: (Stringable a) => [StringTemplate a] -> [a]
 renderTemplates templates = [render template | template <- templates]
 
---        ir = [(name, ["define i32* @" ++ name ++ "() {"] ++ genScIR heap name addr ++ ["}"]) | (name, addr) <- globals]
---
---        stringify acc (name, ir) =
---            acc ++ name ++ ": " ++ foldl makeStr "" ir ++ "\n\n"
---
---        makeStr acc line = acc ++ "\n" ++ line
---
---
---genScIR :: GmHeap -> Name -> Addr -> IR
---genScIR heap name addr = trace ("************** " ++ name ++ ": " ++ show code) ir
---    where
---        (NGlobal arity code) = hLookup heap addr
---        (ir, stack, sp) = foldl collectIR ([], [], 0) code
---
---
---
-----collectIR :: (IR, Stack, StackPointer) -> Instruction -> (IR, Stack, StackPointer)
-----collectIR (ir, stack, sp) (Push i) = (ir, SStack i : stack, sp)
-----collectIR (ir, stack, sp) (Pushint n) = (ir, SNum n : stack, sp)
---collectIR (ir, stack, sp) (Update i) = do
---    let (item : stack') = stack
---    let SNum n = item
---    templates <- directoryGroup templatesPath :: IO (STGroup String)
---    let Just t = getStringTemplate "update" templates
---    setManyAttrib [("intTag", show intTag), ("value", show n)]
-----collectIR (ir, stack, sp) (Pop n) = (ir, stack, sp-n)
-----collectIR (ir, stack, sp) Unwind = (ir', stack, sp+1)
-----    where
-----        ir' = ir ++ ["switch i32 %tag, label %NO_MATCH [" ++ switchBranch intTag "NUM_UNWIND" ++ "]",
-----                     "NO_MATCH:",
-----                     "; there should be error call i32 (i8 *, ...)* @printf(i8* %ps, i32 %num)",
-----                     "NUM_UNWIND:",
-----                     "call i32* "]
-----collectIR (ir, stack, sp) instr = (ir ++ [show instr], stack, sp)
---
---switchBranch :: Int -> String -> String
---switchBranch tag label = "i32 " ++ show tag ++ ", label " ++ label
---
