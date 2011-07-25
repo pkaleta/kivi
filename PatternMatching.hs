@@ -76,44 +76,56 @@ patternMatch (dts, scs) = (dts, scs')
 
 
 matchSc :: [DataType] -> PatScDefn -> PatScDefn
-matchSc dts (PatScDefn name eqs) = (PatScDefn name [(vars, matchEquations ns' dts n varNames eqs def)])
+matchSc dts (PatScDefn name eqs) = (PatScDefn name [(vars, expr')])
     where
+        (ns2, expr') = matchEquations ns1 dts n varNames eqs def
         (patterns, expr) = head eqs
         n = length patterns
-        (ns', varNames) = getNames initialNameSupply ["_u" | i <- [1..n]]
+        (ns1, varNames) = getNames initialNameSupply ["_u" | i <- [1..n]]
         vars = [PVar v | v <- varNames]
         def = EError "No matching pattern found"
 
 
-matchExpr :: [DataType] -> Expr Pattern -> Expr Pattern -> Expr Pattern
-matchExpr dts (ENum n) def = ENum n
-matchExpr dts (EVar v) def = EVar v
-matchExpr dts (EConstr t a) def = EConstr t a
-matchExpr dts (ESelect arity pos name) def = ESelect arity pos name
-matchExpr dts (EAp e1 e2) def = EAp (matchExpr dts e1 def) (matchExpr dts e2 def)
-matchExpr dts (ELam pattern expr) def = ELam [(PVar name)] expr'
+matchExpr :: NameSupply -> [DataType] -> Expr Pattern -> Expr Pattern -> (NameSupply, Expr Pattern)
+matchExpr ns dts (ENum n) def = (ns, ENum n)
+matchExpr ns dts (EVar v) def = (ns, EVar v)
+matchExpr ns dts (EConstr t a) def = (ns, EConstr t a)
+matchExpr ns dts (ESelect arity pos name) def = (ns, ESelect arity pos name)
+matchExpr ns dts (EAp e1 e2) def = (ns2, EAp e1' e2')
     where
-        (ns', name) = getName initialNameSupply "_u"
-        expr' = matchEquations ns' dts 1 [name] [(pattern, expr)] def
-matchExpr dts (ELet isRec defns expr) def = ELet isRec defns' expr'
+        (ns1, e1') = matchExpr ns dts e1 def
+        (ns2, e2') = matchExpr ns1 dts e2 def
+matchExpr ns dts (ELam pattern expr) def = (ns2, ELam [(PVar name)] expr')
     where
-        expr' = matchExpr dts expr def
-        defns' = [(pattern, matchExpr dts rhs def) | (pattern, rhs) <- defns]
-matchExpr dts (ECase expr alts) def = ECase expr' alts'
+        (ns1, name) = getName ns "_u"
+        (ns2, expr') = matchEquations ns1 dts 1 [name] [(pattern, expr)] def
+matchExpr ns dts (ELet isRec defns expr) def = (ns2, ELet isRec defns' expr')
     where
-        expr' = matchExpr dts expr def
-        alts' = [(pattern, matchExpr dts rhs def) | (pattern, rhs) <- alts] ++ [(PDefault, def)]
+        (ns1, expr') = matchExpr ns dts expr def
+        (ns2, defns') = mapAccumL collectDefns ns1 defns
+
+        collectDefns ns (pattern, rhs) = (ns', (pattern, expr'))
+            where (ns', expr') = matchExpr ns dts rhs def
+matchExpr ns dts (ECase expr alts) def = (ns2, ECase expr' alts')
+    where
+        (ns1, expr') = matchExpr ns dts expr def
+        (ns2, alts') = mapAccumL collectAlts ns1 alts
+
+        collectAlts ns (pattern, rhs) = (ns', (pattern, expr'))
+            where (ns', expr') = matchExpr ns dts rhs def
 
 
-matchEquations :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
+matchEquations :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
 matchEquations ns dts n [] eqs def =
     case eqs of
-        ((pattern, expr) : eqs') -> matchExpr dts expr def
-        _ -> def
-matchEquations ns dts n vs eqs def = foldr (matchPatternClass ns dts n vs) def $ Utils.partition classifyEquation eqs
+        ((pattern, expr) : eqs') -> matchExpr ns dts expr def
+        _ -> (ns, def)
+matchEquations ns dts n vs eqs def = foldr matchEquations' (ns, def) $ Utils.partition classifyEquation eqs
+    where
+        matchEquations' eqs (ns, def) = matchPatternClass ns dts n vs eqs def
 
 
-matchPatternClass :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
+matchPatternClass :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
 matchPatternClass ns dts n vars eqs def =
     case classifyEquation $ head eqs of
         Constr -> matchConstr ns dts n vars eqs def
@@ -121,19 +133,24 @@ matchPatternClass ns dts n vars eqs def =
         Num    -> matchNum ns dts n vars eqs def
 
 
-matchVar :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
+matchVar :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
 matchVar ns dts n (var : vars) eqs def =
     matchEquations ns dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
 
 
-matchNum :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
+matchNum :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
 matchNum ns dts n vars@(v : vs) eqs def =
-    ECase (EVar v) $ [(numPattern, matchEquations ns dts n vs [(ps, expr)] def) | (numPattern : ps, expr) <- eqs] ++ [(PDefault, def)]
+    (ns', ECase (EVar v) (alts ++ [(PDefault, def)]))
+    where
+        (ns', alts) = mapAccumL matchAlts ns eqs
+
+        matchAlts ns (numPattern : ps, expr) = (ns', (numPattern, expr'))
+            where (ns', expr') = matchEquations ns dts n vs [(ps, expr)] def
 
 
-matchConstr :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> Expr Pattern
+matchConstr :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
 matchConstr ns dts n vars@(v : vs) eqs def =
-    ECase (EVar v) [matchConstrAlter ns dts tag n vars (choose tag eqs) def | tag <- tags]
+    (ns', ECase (EVar v) alts')
     where
         -- it's sufficient to take only the head of equations since all of the
         -- constructors in eqs will be constructors of the same type (assuming
@@ -144,12 +161,25 @@ matchConstr ns dts n vars@(v : vs) eqs def =
         isConstr t1 (PConstr t2 arity ps' : ps, expr) | t1 == t2 = True
         isConstr t _ = False
 
+        (ns', alts') = mapAccumL matchAlts ns tags
 
-matchConstrAlter :: NameSupply -> [DataType] -> Int -> Int -> [Name] -> [Equation] -> Expr Pattern -> Alter Pattern Pattern
+        matchAlts ns tag = matchConstrAlter ns dts tag n vars (choose tag eqs) def
+
+
+matchConstrAlter :: NameSupply
+                 -> [DataType]
+                 -> Int
+                 -> Int
+                 -> [Name]
+                 -> [Equation]
+                 -> Expr Pattern
+                 -> (NameSupply, Alter Pattern Pattern)
 matchConstrAlter ns dts tag n (v : vs) eqs def =
-    (PConstr tag n' $ List.map PVar vs', matchEquations ns' dts (n' + n) (vs' ++ vs) eqs' def)
+    (ns2, (PConstr tag n' $ List.map PVar vs', expr'))
     where
         n' = arity tag dts
-        (ns', vs') = getNames ns ["_u" | i <- [1..n']]
+        (ns1, vs') = getNames ns ["_u" | i <- [1..n']]
         eqs' = [(ps' ++ ps, expr) | ((PConstr tag arity ps' : ps), expr) <- eqs]
+
+        (ns2, expr') = matchEquations ns1 dts (n' + n) (vs' ++ vs) eqs' def
 

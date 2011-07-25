@@ -163,7 +163,7 @@ compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
     compileB cond env ++ [Cond (compileE et env) (compileE ef env)]
 compileE expr@(EAp (EAp (EVar name) e1) e2) env =
     case aHasKey builtinDyadic name of
-        True -> compileB expr env ++[intOrBool name]
+        True -> compileB expr env ++ [intOrBool name]
         False -> compileC expr env ++ [Eval]
 compileE expr env =
     compileC expr env ++ [Eval]

@@ -18,8 +18,7 @@ import TypeChecker
 
 
 --runTest :: String -> CoreProgram
-runTest = --lambdaLift . lazyLambdaLift . analyseDeps . 
-    typeCheck . transformToLambdaCalculus . mergePatterns . tag . parse
+runTest = lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
 
 run :: String -> String
 run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
