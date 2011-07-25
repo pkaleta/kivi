@@ -11,6 +11,7 @@ type Equation = ([Pattern], Expr Pattern)
 
 
 data PatScDefn = PatScDefn Name [Equation]
+    deriving Show
 
 
 type PatProgram = ([DataType], [PatScDefn])
