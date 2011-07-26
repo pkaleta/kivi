@@ -1,10 +1,16 @@
 declare i32 @printf(i8 *, ...)
 declare i8* @malloc(i32)
+
+
 @s = internal constant [6 x i8] c"ERROR\\00"
 @snum = internal constant [4 x i8] c"%d\\0A\\00"
+@sp = global i32
 
 define i32 @main() {
-    %ptag = call i32* ()* @_main()
+    %sp = alloca i32
+
+    %ptag = call i32* (i32)* @_main(i32 0)
+    ; tutaj teoretycznie powinien byc test czy zgadza sie liczba argumentow
     %tag = load i32* %ptag
 
     switch i32 %tag, label %ERROR [i32 1, label %NUM]

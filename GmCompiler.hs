@@ -15,20 +15,19 @@ type GmEnvironment = Assoc Name Int
 
 
 primitiveScs :: [CoreScDefn]
---primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
---                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
---                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
---                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
---                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
---                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
---                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
---                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
---                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
---                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
---                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
---                (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
+primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
+                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
+                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
+                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
+                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
+                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
+                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
+                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
+                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
+                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+                (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
 
-primitiveScs = []
 
 selFunName :: Int -> Int -> String
 selFunName r i = "select-" ++ show r ++ "-" ++ show i

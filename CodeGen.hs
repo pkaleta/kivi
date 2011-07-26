@@ -17,87 +17,133 @@ import TypeChecker
 import Text.StringTemplate
 
 
-type IR = [String]
-type Stack = [StackItem]
-type StackPointer = Int
-data StackItem = SNum Int
-               | SStack Int
-               | SHeap Int
+type Reg = Int
+type LLVMIR = StringTemplate String
+type LLVMStack = [LLVMValue]
+data LLVMValue = LLVMNum Int
+               | LLVMReg Reg
+    deriving Show
 
 
-intTag :: Int
-intTag = 1
+numTag :: Int
+numTag = 1
+
+globalTag :: Int
+globalTag = 2
+
+apTag :: Int
+apTag = 3
+
+
+initialReg :: Reg
+initialReg = 1
+
+nextReg :: Reg -> Reg
+nextReg reg = reg + 1
 
 
 templatesPath :: String
 templatesPath = "templates/"
 
 
-saveIR :: IO (StringTemplate String) -> IO ()
-saveIR ir = do
+codegenPath :: String
+codegenPath = "codegen/"
+
+
+saveLLVMIR :: IO (LLVMIR) -> IO ()
+saveLLVMIR ir = do
     content <- ir
     let filePath = "codegen/test.ll"
+    putStrLn . render $ content
     writeFile filePath $ render content
 
 
-genIR :: String -> IO (StringTemplate String)
-genIR program = do
+genLLVMIR :: String -> IO (LLVMIR)
+genLLVMIR program = do
     templates <- directoryGroup templatesPath :: IO (STGroup String)
-    return $ (genProgramIR templates) . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse $ program
+    return $ (genProgramLLVMIR templates) . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse $ program
 
 
-genProgramIR :: STGroup String -> CoreProgram -> StringTemplate String
-genProgramIR templates program@(adts, scs) =
+genProgramLLVMIR :: STGroup String -> CoreProgram -> LLVMIR
+genProgramLLVMIR templates program@(adts, scs) =
     setAttribute "scs" (renderTemplates scsTemplates) t
     where
         state = compile program
         globals = getGlobals state
         heap = getHeap state
         Just t = getStringTemplate "program" templates
-        scsTemplates = genScsIR heap templates globals
+        scsTemplates = genScsLLVMIR heap templates globals
 
 
-genScsIR :: GmHeap -> STGroup String -> Assoc Name Addr -> [StringTemplate String]
-genScsIR heap templates globals =
+genScsLLVMIR :: GmHeap -> STGroup String -> Assoc Name Addr -> [LLVMIR]
+genScsLLVMIR heap templates globals =
     map (mapScDefn heap template templates) globals
     where
         Just template = getStringTemplate "sc" templates
 
 
-mapScDefn :: GmHeap -> StringTemplate String -> STGroup String -> (Name, Addr) -> StringTemplate String
+mapScDefn :: GmHeap -> LLVMIR -> STGroup String -> (Name, Addr) -> LLVMIR
 mapScDefn heap template templates (name, addr) =
     setAttribute "body" body $ setAttribute "name" name template
     where
         (NGlobal arity code) = hLookup heap addr
-        body = renderTemplates $ genScIR templates code
+        body = trace ("\n\n" ++ show code ++ "\n\n") renderTemplates $ genScLLVMIR templates code
 
 
-genScIR :: STGroup String -> GmCode -> [StringTemplate String]
-genScIR templates code = ir
+genScLLVMIR :: STGroup String -> GmCode -> [LLVMIR]
+genScLLVMIR templates code = ir
     where
-        (stack, ir) = foldl (collectInstrIR templates) ([], []) code
+        (reg, stack, ir) = foldl (\state@(reg, stack, ir) instr -> trace ("instr: " ++ show instr ++ "\nstack: " ++ show stack ++ "\n\n") (collectInstrLLVMIR templates state instr)) (initialReg, [], []) code
 
 
-collectInstrIR :: STGroup String
-               -> (Stack, [StringTemplate String])
+collectInstrLLVMIR :: STGroup String
+               -> (Reg, LLVMStack, [LLVMIR])
                -> Instruction
-               -> (Stack, [StringTemplate String])
-collectInstrIR templates (stack, ir) (Update n) = (stack', ir ++ [template'])
+               -> (Reg, LLVMStack, [LLVMIR])
+--collectInstrLLVMIR templates (stack, ir) (Update n) =
+--    case stack of
+--        (LLVMNum n : stack') -> (stack', ir ++ updateNumLLVMIR templates n)
+--        (LLVMGlobal v : stack') -> (stack', ir ++ updateGlobalLLVMIR templates v)
+collectInstrLLVMIR templates (reg, stack, ir) (Push n) = (reg, arg : stack, ir)
+    where arg = stack !! n
+collectInstrLLVMIR templates (reg, stack, ir) (Pop n) = (reg, drop n stack, ir)
+-- TODO: change this not to allocate numbers on heap
+collectInstrLLVMIR templates (reg, stack, ir) (Pushint n) = (nextReg reg, LLVMReg reg : stack, ir ++ [template'])
     where
-        (SNum n : stack') = stack
-        template' = setManyAttrib [("intTag", show intTag), ("value", show n)] template
-        Just template = getStringTemplate "update" templates
-collectInstrIR templates acc@(stack, ir) (Pop n) = acc
-collectInstrIR templates (stack, ir) (Unwind) =  (stack, ir ++ [template])
+        Just template = getStringTemplate "pushint" templates
+        template' = setManyAttrib [("reg", show reg), ("tag", show numTag), ("n", show n)] template
+collectInstrLLVMIR templates (reg, stack, ir) (Pushglobal v) = (nextReg reg, LLVMReg reg : stack, ir ++ [template'])
     where
-        Just template = getStringTemplate "unwind" templates
-collectInstrIR templates (stack, ir) (Push n) = (stack, ir ++ [template])
+        Just template = getStringTemplate "pushglobal" templates
+        template' = setManyAttrib [("reg", show reg), ("tag", show globalTag), ("v", show v)] template
+collectInstrLLVMIR templates (reg, stack, ir) (Mkap) = (reg', stack', ir ++ [template'])
     where
-        Just template = getStringTemplate "push" templates
-collectInstrIR templates (stack, ir) (Pushint n) = (SNum n : stack, ir)
-collectInstrIR templates acc@(stack, ir) _ = acc
+        Just template = getStringTemplate "mkap" templates
+        template' = setManyAttrib [("reg", show reg), ("tag", show apTag), ("e1", show r1), ("e2", show r2)] template
+        (LLVMReg r1 : LLVMReg r2 : as) = stack
+        reg' = nextReg reg
+        stack' = LLVMReg reg : as
+--collectInstrLLVMIR templates (reg, stack, ir) (Unwind) =  (reg, stack, ir)
+--    where
+--        Just template = getStringTemplate "unwind" templates
+--collectInstrLLVMIR templates (stack, ir) (Eval) =
+--    case stack of
+--        (SAp e1 e2 : rest) -> (stack, ir)
+--        _                  -> (stack, ir)
+collectInstrLLVMIR templates state _ = state
 
 
-renderTemplates :: (Stringable a) => [StringTemplate a] -> [a]
+--updateNumLLVMIR :: STGroup String -> Name -> [LLVMIR]
+--updateNumLLVMIR templates name =
+--    setManyAttrib [("intTag", show intTag), ("value", show n)] template
+--    where Just template = getStringTemplate "update_int" templates
+--
+--updateGlobalLLVMIR :: STGroup String -> Name -> [LLVMIR]
+--updateGlobalLLVMIR templates name =
+--    setManyAttrib [("intTag", show globalTag), ("globalPtr", show n)] template
+--    where Just template = getStringTemplate "update_global" templates
+
+
+renderTemplates :: [LLVMIR] -> [String]
 renderTemplates templates = [render template | template <- templates]
 
