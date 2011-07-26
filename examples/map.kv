@@ -1,0 +1,6 @@
+map f [] = [];
+map f (Cons x xs) = Cons (f x) (map f xs);
+
+inc x = x+1;
+
+main = map inc [1,2,3]
