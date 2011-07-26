@@ -154,10 +154,14 @@ pPatternExpr =
     (pVar `pApply` PVar) `pOr`
     (pNum `pApply` PNum) `pOr`
     pThen mkConstr pConstrName (pZeroOrMore pPatternExpr) `pOr`
+    pThen3 mkListPattern (pLit "[") (pZeroOrMoreWithSep pPatternExpr (pLit ",")) (pLit "]") `pOr`
     pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
     where
+        mkListPattern _ patterns _ = foldr cons (PConstrName "Nil" []) patterns
         mkConstr name patExprs = PConstrName name patExprs
         mkParenExpr _ expr _ = expr
+
+        cons expr list = trace ("\n\n*************" ++ show expr ++ ", " ++ show list ++ "\n\n") PConstrName "Cons" [expr, list]
 
 
 pConstrDecl :: Parser Constructor
