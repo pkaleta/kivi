@@ -1,14 +1,54 @@
 declare i32 @printf(i8 *, ...)
 declare i8* @malloc(i32)
 
+; type declarations
+%stack_item = type { %stack_item*, i32* }
 
+; constants
 @s = internal constant [6 x i8] c"ERROR\\00"
 @snum = internal constant [4 x i8] c"%d\\0A\\00"
-@sp = global i32
+
+; globals
+@sp = %stack_item* null ; run-time stack pointer
+
+
+define void @push(%stack_item* %item, i32* %addr) {
+    %pprev = call %stack_item**(%stack_item*)* @get_prev(%stack_item* %%item)
+    %paddr = call i32**(%stack_item*)* @get_addr(%stack_item* %%item)
+
+    %ptop = load %stack_item** @sp
+    store %stack_item* %ptop, %stack_item** %pprev
+    store i32* %addr, i32** %paddr
+
+    store %stack_item* %item, %stack_item** @sp
+
+    ret void
+}
+
+define i32* @pop() {
+    %sp = load %stack_item** @sp
+    %pprev = call %stack_item**(%stack_item*)* @get_prev(%stack_item* %sp)
+    %paddr = call i32**(%stack_item*)* @get_addr(%stack_item* %sp)
+
+    %prev = load %stack_item** %pprev
+    store %stack_item* %prev, %stack_item** @sp
+
+    %addr = load i32** %paddr
+    ret i32* %addr
+}
+
+define %stack_item** @get_prev(%stack_item* %item) {
+    %pprev = getelementptr %stack_item* %item, i32 0, i32 0
+    ret %stack_item** %pprev
+}
+
+define i32** @get_addr(%stack_item* %item) {
+    %paddr = getelementptr %stack_item* %item, i32 0, i32 1
+    ret i32** %paddr
+}
+
 
 define i32 @main() {
-    %sp = alloca i32
-
     %ptag = call i32* (i32)* @_main(i32 0)
     ; tutaj teoretycznie powinien byc test czy zgadza sie liczba argumentow
     %tag = load i32* %ptag
