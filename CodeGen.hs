@@ -109,23 +109,23 @@ collectInstrLLVMIR templates (reg, stack, ir) (Push n) = (reg, stack, ir ++ [tem
     where
         Just template = getStringTemplate "push" templates
         template' = setManyAttrib [("n", show n)] template
-collectInstrLLVMIR templates (reg, stack, ir) (Pop n) = (reg, drop n stack, ir)
+collectInstrLLVMIR templates (reg, stack, ir) (Pop n) = (reg, stack, ir ++ [template'])
+    where
+        Just template = getStringTemplate "pop" templates
+        template' = setManyAttrib [("n", show n)] template
 -- TODO: change this not to allocate numbers on heap
 collectInstrLLVMIR templates (reg, stack, ir) (Pushint n) = (nextReg reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushint" templates
         template' = setManyAttrib [("n", show n)] template
-collectInstrLLVMIR templates (reg, stack, ir) (Pushglobal v) = (nextReg reg, LLVMReg reg : stack, ir ++ [template'])
+collectInstrLLVMIR templates (reg, stack, ir) (Pushglobal v) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushglobal" templates
-        template' = setManyAttrib [("reg", show reg), ("tag", show globalTag), ("v", show v)] template
-collectInstrLLVMIR templates (reg, stack, ir) (Mkap) = (reg', stack', ir ++ [template'])
+-- TODO: fix arity
+        template' = setManyAttrib [("arity", show 2), ("name", "_" ++ v)] template
+collectInstrLLVMIR templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkap" templates
-        template' = setManyAttrib [("reg", show reg), ("tag", show apTag), ("e1", show r1), ("e2", show r2)] template
-        (LLVMReg r1 : LLVMReg r2 : as) = stack
-        reg' = nextReg reg
-        stack' = LLVMReg reg : as
 --collectInstrLLVMIR templates (reg, stack, ir) (Unwind) =  (reg, stack, ir)
 --    where
 --        Just template = getStringTemplate "unwind" templates
