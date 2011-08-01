@@ -1,4 +1,5 @@
-define i32* @_$name$(i32 %sp) {
-$body$
+define void @_$name$() {
+    $body$
+    ret void
 }
 

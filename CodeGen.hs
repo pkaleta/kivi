@@ -22,6 +22,7 @@ type LLVMIR = StringTemplate String
 type LLVMStack = [LLVMValue]
 data LLVMValue = LLVMNum Int
                | LLVMReg Reg
+               | LLVMStackAddr Int
     deriving Show
 
 
@@ -54,7 +55,7 @@ saveLLVMIR :: IO (LLVMIR) -> IO ()
 saveLLVMIR ir = do
     content <- ir
     let filePath = "codegen/test.ll"
-    putStrLn . render $ content
+--    putStrLn . render $ content
     writeFile filePath $ render content
 
 
@@ -104,14 +105,16 @@ collectInstrLLVMIR :: STGroup String
 --    case stack of
 --        (LLVMNum n : stack') -> (stack', ir ++ updateNumLLVMIR templates n)
 --        (LLVMGlobal v : stack') -> (stack', ir ++ updateGlobalLLVMIR templates v)
-collectInstrLLVMIR templates (reg, stack, ir) (Push n) = (reg, arg : stack, ir)
-    where arg = stack !! n
+collectInstrLLVMIR templates (reg, stack, ir) (Push n) = (reg, stack, ir ++ [template'])
+    where
+        Just template = getStringTemplate "push" templates
+        template' = setManyAttrib [("n", show n)] template
 collectInstrLLVMIR templates (reg, stack, ir) (Pop n) = (reg, drop n stack, ir)
 -- TODO: change this not to allocate numbers on heap
-collectInstrLLVMIR templates (reg, stack, ir) (Pushint n) = (nextReg reg, LLVMReg reg : stack, ir ++ [template'])
+collectInstrLLVMIR templates (reg, stack, ir) (Pushint n) = (nextReg reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushint" templates
-        template' = setManyAttrib [("reg", show reg), ("tag", show numTag), ("n", show n)] template
+        template' = setManyAttrib [("n", show n)] template
 collectInstrLLVMIR templates (reg, stack, ir) (Pushglobal v) = (nextReg reg, LLVMReg reg : stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushglobal" templates
