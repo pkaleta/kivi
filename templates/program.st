@@ -45,7 +45,7 @@ define void @pop(i32 %n) {
     %vsp = load i32* @sp
 
     ; update the stack pointer
-    %vsp1 = sub i32 %vsp, 3
+    %vsp1 = sub i32 %vsp, 1
     store i32 %vsp1, i32* @sp
 
     ret void
@@ -112,10 +112,24 @@ define void @mkap() {
     ret void
 }
 
+define void @update(i32 %n) {
+    %vsp = load i32* @sp
+    %temp = getelementptr [1000 x i32*]* @stack, i32 0, i32 %vsp
+    %topAddr = load i32** %temp
+
+    ; update the nth node on the stack to hold the same value as the top node
+    %n1 = add i32 %n, 1
+    %rootIndex = sub i32 %vsp, %n1
+    %toUpdate = getelementptr [1000 x i32*]* @stack, i32 0, i32 %rootIndex
+    store i32* %topAddr, i32** %toUpdate
+
+    ret void
+}
+
 
 define i32 @main() {
     call void()* @_main()
-    ; tutaj teoretycznie powinien byc test czy zgadza sie liczba argumentow
+    ; TODO: tutaj teoretycznie powinien byc test czy zgadza sie liczba argumentow
 
     %vsp = load i32* @sp
     %index = sub i32 %vsp, 1

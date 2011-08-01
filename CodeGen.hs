@@ -101,10 +101,10 @@ collectInstrLLVMIR :: STGroup String
                -> (Reg, LLVMStack, [LLVMIR])
                -> Instruction
                -> (Reg, LLVMStack, [LLVMIR])
---collectInstrLLVMIR templates (stack, ir) (Update n) =
---    case stack of
---        (LLVMNum n : stack') -> (stack', ir ++ updateNumLLVMIR templates n)
---        (LLVMGlobal v : stack') -> (stack', ir ++ updateGlobalLLVMIR templates v)
+collectInstrLLVMIR templates (reg, stack, ir) (Update n) = (reg, stack, ir ++ [template'])
+    where
+        Just template = getStringTemplate "update" templates
+        template' = setManyAttrib [("n", show n)] template
 collectInstrLLVMIR templates (reg, stack, ir) (Push n) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "push" templates
