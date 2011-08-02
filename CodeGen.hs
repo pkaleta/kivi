@@ -129,10 +129,9 @@ collectInstrLLVMIR templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [templ
 --collectInstrLLVMIR templates (reg, stack, ir) (Unwind) =  (reg, stack, ir)
 --    where
 --        Just template = getStringTemplate "unwind" templates
---collectInstrLLVMIR templates (stack, ir) (Eval) =
---    case stack of
---        (SAp e1 e2 : rest) -> (stack, ir)
---        _                  -> (stack, ir)
+collectInstrLLVMIR templates (reg, stack, ir) (Eval) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "eval" templates
 collectInstrLLVMIR templates state _ = state
 
 

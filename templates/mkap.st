@@ -1,2 +1,2 @@
-call void()* @mkap()
+call void()* @GMMkap()
 

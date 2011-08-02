@@ -1,2 +1,2 @@
-call void(i32)* @pushint(i32 $n$)
+call void(i32)* @GMPushint(i32 $n$)
 

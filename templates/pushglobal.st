@@ -11,12 +11,7 @@ store i32 %globaltag, i32* %ptag
 store i32 $arity$, i32* %par
 store void()* @$name$, void()** %pcode
 
-; store function cell address on the stack
-%vsp = load i32* @sp
-%ptop = getelementptr [1000 x i32*]* @stack, i32 0, i32 %vsp
-store i32* %ptag, i32** %ptop
 
-; update stack pointer
-%vsp1 = add i32 %vsp, 1
-store i32 %vsp1, i32* @sp
+; store function cell address on the stack
+call void(i32*)* @push(i32* %ptag)
 
