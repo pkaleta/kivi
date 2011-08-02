@@ -122,7 +122,7 @@ collectInstrLLVMIR templates (reg, stack, ir) (Pushglobal v) = (reg, stack, ir +
     where
         Just template = getStringTemplate "pushglobal" templates
 -- TODO: fix arity
-        template' = setManyAttrib [("arity", show 2), ("name", "_" ++ v)] template
+        template' = setManyAttrib [("arity", show 1), ("name", "_" ++ v)] template
 collectInstrLLVMIR templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkap" templates
