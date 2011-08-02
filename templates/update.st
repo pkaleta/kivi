@@ -1,2 +1,2 @@
-call void(i32)* @GMUpdate(i32 $n$)
+call void(i64)* @GMUpdate(i64 $n$)
 

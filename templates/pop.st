@@ -1,1 +1,1 @@
-call void(i32)* @GMPop(i32 $n$)
+call void(i64)* @GMPop(i64 $n$)

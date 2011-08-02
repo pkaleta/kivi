@@ -1,2 +1,2 @@
-call void(i32)* @GMPush(i32 $n$)
+call void(i64)* @GMPush(i64 $n$)
 
