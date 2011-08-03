@@ -11,6 +11,8 @@ declare i8* @memcpy(i8*, i8*, i64)
 @GLOBAL_TAG = global i64 3
 
 ; globals
+@vstack = global [1000 x i64] undef
+@vsp = global i64 undef
 @stack = global [1000 x i64*] undef
 @sp = global i64 undef ; run-time stack pointer
 
@@ -31,23 +33,35 @@ define void @push(i64* %addr) {
     store i64* %addr, i64** %ptop
 
     ; increment stack pointer
-    call void()* @incSp()
+    call void(i64*)* @incSp(i64* @sp)
 
     ret void
 }
 
-define void @incSp() {
-    %n = load i64* @sp
+define void @pushV(i64 %val) {
+    ; store address on stack
+    %n = load i64* @vsp
+    %ptop = call i64*(i64)* @getItemV(i64 %n)
+    store i64 %val, i64* %ptop
+
+    ; increment stack pointer
+    call void(i64*)* @incSp(i64* @vsp)
+
+    ret void
+}
+
+define void @incSp(i64* %sp) {
+    %n = load i64* %sp
     %n1 = add i64 %n, 1
-    store i64 %n1, i64* @sp
+    store i64 %n1, i64* %sp
 
     ret void
 }
 
-define void @decSp() {
-    %n = load i64* @sp
+define void @decSp(i64* %sp) {
+    %n = load i64* %sp
     %n1 = sub i64 %n, 1
-    store i64 %n1, i64* @sp
+    store i64 %n1, i64* %sp
 
     ret void
 }
@@ -60,10 +74,24 @@ define i64** @getTop() {
     ret i64** %item
 }
 
+define i64* @getTopV() {
+    %n = load i64* @vsp
+    %n1 = sub i64 %n, 1
+    %item = call i64*(i64)* @getItemV(i64 %n1)
+
+    ret i64* %item
+}
+
 define i64** @getItem(i64 %n) {
     %item = getelementptr [1000 x i64*]* @stack, i64 0, i64 %n
 
     ret i64** %item
+}
+
+define i64* @getItemV(i64 %n) {
+    %item = getelementptr [1000 x i64]* @vstack, i64 0, i64 %n
+
+    ret i64* %item
 }
 
 
@@ -301,6 +329,8 @@ DONE_UNWIND:
 
 
 define i64 @main() {
+    store i64 0, i64* @sp
+    store i64 0, i64* @vsp
     call void()* @_main()
 
     %ptop = call i64**()* @getTop()
