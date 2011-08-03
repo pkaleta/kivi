@@ -142,6 +142,15 @@ collectInstrLLVMIR templates (reg, stack, ir) (Get) = (reg, stack, ir ++ [templa
 collectInstrLLVMIR templates (reg, stack, ir) (Add) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "add" templates
+collectInstrLLVMIR templates (reg, stack, ir) (Sub) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "sub" templates
+collectInstrLLVMIR templates (reg, stack, ir) (Mul) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "mul" templates
+collectInstrLLVMIR templates (reg, stack, ir) (Div) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "div" templates
 collectInstrLLVMIR templates (reg, stack, ir) (MkInt) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkint" templates

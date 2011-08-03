@@ -409,6 +409,33 @@ define void @GMAdd() {
     ret void
 }
 
+define void @GMSub() {
+    %a = call i64()* @popV()
+    %b = call i64()* @popV()
+    %res = sub i64 %a, %b
+    call void(i64)* @pushV(i64 %res)
+
+    ret void
+}
+
+define void @GMMul() {
+    %a = call i64()* @popV()
+    %b = call i64()* @popV()
+    %res = mul i64 %a, %b
+    call void(i64)* @pushV(i64 %res)
+
+    ret void
+}
+
+define void @GMDiv() {
+    %a = call i64()* @popV()
+    %b = call i64()* @popV()
+    %res = udiv i64 %a, %b
+    call void(i64)* @pushV(i64 %res)
+
+    ret void
+}
+
 define void @GMMkInt() {
     %n = call i64()* @popV()
 
