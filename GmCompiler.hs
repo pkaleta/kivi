@@ -7,6 +7,7 @@ import Utils
 import List
 import Core
 import Debug.Trace
+import AbstractDataTypes
 
 
 type GmCompiledSc = (Name, Int, GmCode)
@@ -25,8 +26,7 @@ primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y
                 (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
                 (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
                 (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
-                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
-                (ScDefn "if" ["c", "t", "f"] (EAp (EAp (EAp (EVar "if") (EVar "c")) (EVar "t")) (EVar "y")))]
+                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")))]
 
 
 selFunName :: Int -> Int -> String
@@ -122,7 +122,7 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
                                       | otherwise = compileLet [] (compileR $ d + n) defs body env
     where n = length defs
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
-    compileB cond env ++ [Cond (compileR d et env) (compileR d ef env)]
+    compileE cond env ++ [CasejumpConstr [(trueTag, compileR d et env), (falseTag, compileR d ef env)]]
 compileR d (ECaseSimple expr alts) env =
     compileE expr env ++ [CasejumpSimple $ compileD (compileR $ d + 1) alts $ argOffset 1 env]
 compileR d (ECaseConstr expr alts) env =
@@ -137,7 +137,7 @@ compileB (ELet isRec defs body) env | isRec = compileLetrec [Pop $ length defs] 
 compileB (EAp (EVar "negate") expr) env =
     compileB expr env ++ [Neg]
 compileB (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
-    compileB cond env ++ [Cond (compileB et env) (compileB ef env)]
+    compileE cond env ++ [CasejumpConstr [(trueTag, compileB et env), (falseTag, compileB ef env)]]
 compileB expr@(EAp (EAp (EVar name) e1) e2) env =
     compileB e2 env ++
     compileB e1 env ++
@@ -159,7 +159,7 @@ compileE (ECaseConstr expr alts) env =
 compileE (EAp (EVar "negate") expr) env =
     compileB expr env ++ [MkInt]
 compileE (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
-    compileB cond env ++ [Cond (compileE et env) (compileE ef env)]
+    compileE cond env ++ [CasejumpConstr [(trueTag, compileE et env), (falseTag, compileE ef env)]]
 compileE expr@(EAp (EAp (EVar name) e1) e2) env =
     case aHasKey builtinDyadic name of
         True -> compileB expr env ++ [intOrBool name]

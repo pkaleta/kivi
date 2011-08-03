@@ -99,7 +99,6 @@ dispatch Lt                  = lt
 dispatch Le                  = le
 dispatch Gt                  = gt
 dispatch Ge                  = ge
-dispatch (Cond ist isf)      = cond ist isf
 dispatch (Pack t n)          = pack t n
 dispatch (CasejumpSimple bs) = casejumpSimple bs
 dispatch (CasejumpConstr bs) = casejumpConstr bs
@@ -294,15 +293,6 @@ gt = relational2 (>)
 ge :: GmState -> GmState
 ge = relational2 (>=)
 
-cond :: GmCode -> GmCode -> GmState -> GmState
-cond ist isf state =
-    putCode code' $ putVStack vs state
-    where
-        (v : vs) = getVStack state
-        code' = case v of
-            0 -> ist ++ code
-            1 -> isf ++ code
-        code = getCode state
 
 pack :: Int -> Int -> GmState -> GmState
 pack t n state =

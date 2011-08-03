@@ -5,15 +5,21 @@ import Common
 import ParserTypes
 import Data.List
 import Data.Map as Map
+import Debug.Trace
 
 
 type Tag = Int
 type Arity = Int
 type NameConstrMapping = Map Name (Tag, Int)
 
+trueTag :: Tag
+trueTag = 1
+
+falseTag :: Tag
+falseTag = 0
 
 primitiveADTs :: [DataType]
-primitiveADTs = [("Bool", [("True", undefinedTag, 0), ("False", undefinedTag, 0)]),
+primitiveADTs = [("Bool", [("True", trueTag, 0), ("False", falseTag, 0)]),
                  ("List", [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)]),
                  ("Tuple0", [("Tuple0", undefinedTag, 0)]),
                  ("Tuple1", [("Tuple1", undefinedTag, 1)]),
@@ -63,7 +69,7 @@ findConstrByName name []                                        = Nothing
 
 
 initialTag :: Tag
-initialTag = 0
+initialTag = 2
 
 
 undefinedTag :: Tag
@@ -81,10 +87,13 @@ tagADT :: (NameConstrMapping, Tag) -> DataType -> ((NameConstrMapping, Tag), Dat
 tagADT (mapping, curTag) (dtName, cs) =
     ((mapping', curTag'), (dtName, cs'))
     where
-        ((mapping', curTag'), cs') = mapAccumL collect (mapping, curTag) cs
+        ((mapping', curTag'), cs') = mapAccumL collectTag (mapping, curTag) cs
 
-        collect (mapping, curTag) (name, undefinedTag, arity) =
-            ((Map.insert name (curTag, arity) mapping, curTag+1), (name, curTag, arity))
+collectTag :: (NameConstrMapping, Tag) -> Constructor -> ((NameConstrMapping, Tag), Constructor)
+collectTag (mapping, curTag) (name, -1, arity) =
+    ((Map.insert name (curTag, arity) mapping, curTag + 1), (name, curTag, arity))
+collectTag (mapping, curTag) adt@(name, tag, arity) = ((Map.insert name (tag, arity) mapping, curTag), adt)
+
 
 
 tagSc :: NameConstrMapping -> PatScDefn -> PatScDefn

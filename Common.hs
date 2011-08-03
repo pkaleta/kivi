@@ -81,7 +81,6 @@ data Instruction = Unwind
                  | Eval
                  | Add | Sub | Mul | Div | Neg
                  | Eq | Ne | Lt | Le | Gt | Ge
-                 | Cond GmCode GmCode
                  | Pack Int Int
                  | CasejumpSimple (Assoc Int GmCode)
                  | CasejumpConstr (Assoc Int GmCode)
