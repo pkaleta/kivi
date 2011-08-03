@@ -21,6 +21,7 @@ import Text.StringTemplate
 type Reg = Int
 type LLVMIR = StringTemplate String
 type LLVMStack = [LLVMValue]
+type NameArityCodeMapping = Map Name (Arity, GmCode)
 data LLVMValue = LLVMNum Int
                | LLVMReg Reg
                | LLVMStackAddr Int
@@ -69,6 +70,15 @@ codegenPath :: String
 codegenPath = "codegen/"
 
 
+createNameArityCodeMapping :: GmHeap -> GmGlobals -> NameArityCodeMapping
+createNameArityCodeMapping heap globals = Map.fromList [createEntry heap name addr | (name, addr) <- globals]
+
+createEntry :: GmHeap -> Name -> Addr -> (Name, (Arity, GmCode))
+createEntry heap name addr = (name, (arity, code))
+    where (NGlobal arity code) = hLookup heap addr
+
+
+
 saveLLVMIR :: IO (LLVMIR) -> IO ()
 saveLLVMIR ir = do
     content <- ir
@@ -91,105 +101,105 @@ genProgramLLVMIR templates program@(adts, scs) =
         globals = getGlobals state
         heap = getHeap state
         Just t = getStringTemplate "program" templates
-        scsTemplates = genScsLLVMIR heap templates globals
+        mapping = createNameArityCodeMapping heap globals
+        scsTemplates = genScsLLVMIR mapping templates globals
 
 
-genScsLLVMIR :: GmHeap -> STGroup String -> Assoc Name Addr -> [LLVMIR]
-genScsLLVMIR heap templates globals =
-    Prelude.map (mapScDefn heap template templates) globals
+genScsLLVMIR :: NameArityCodeMapping -> STGroup String -> Assoc Name Addr -> [LLVMIR]
+genScsLLVMIR mapping templates globals =
+    Prelude.map (mapScDefn mapping template templates) globals
     where
         Just template = getStringTemplate "sc" templates
 
 
-mapScDefn :: GmHeap -> LLVMIR -> STGroup String -> (Name, Addr) -> LLVMIR
-mapScDefn heap template templates (name, addr) =
+mapScDefn :: NameArityCodeMapping -> LLVMIR -> STGroup String -> (Name, Addr) -> LLVMIR
+mapScDefn mapping template templates (name, addr) =
     setAttribute "body" body $ setAttribute "name" (mkFunName name) template
     where
-        (NGlobal arity code) = hLookup heap addr
-        body = trace ("\n\n" ++ show code ++ "\n\n") renderTemplates $ genScLLVMIR templates arity code
+        Just (arity, code) = Map.lookup name mapping
+        body = trace ("\n\n" ++ show code ++ "\n\n") renderTemplates $ genScLLVMIR mapping templates code
 
 
-genScLLVMIR :: STGroup String -> Int -> GmCode -> [LLVMIR]
-genScLLVMIR templates arity code = ir
+genScLLVMIR :: NameArityCodeMapping -> STGroup String -> GmCode -> [LLVMIR]
+genScLLVMIR mapping templates code = ir
     where
-        (reg, stack, ir) = foldl (\state@(reg, stack, ir) instr -> trace ("instr: " ++ show instr ++ "\nstack: " ++ show stack ++ "\n\n") (collectInstrLLVMIR templates arity state instr)) (initialReg, [], []) code
+        (reg, stack, ir) = foldl (\state@(reg, stack, ir) instr -> trace ("instr: " ++ show instr ++ "\nstack: " ++ show stack ++ "\n\n") (translateToLLVMIR mapping templates state instr)) (initialReg, [], []) code
 
 
-collectInstrLLVMIR :: STGroup String
-                   -> Int
-                   -> (Reg, LLVMStack, [LLVMIR])
-                   -> Instruction
-                   -> (Reg, LLVMStack, [LLVMIR])
-collectInstrLLVMIR templates arity (reg, stack, ir) (Update n) = (reg, stack, ir ++ [template'])
+translateToLLVMIR :: NameArityCodeMapping
+                  -> STGroup String
+                  -> (Reg, LLVMStack, [LLVMIR])
+                  -> Instruction
+                  -> (Reg, LLVMStack, [LLVMIR])
+translateToLLVMIR mapping templates (reg, stack, ir) (Update n) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "update" templates
         template' = setManyAttrib [("n", show n)] template
-collectInstrLLVMIR templates arity (reg, stack, ir) (Push n) = (reg, stack, ir ++ [template'])
+translateToLLVMIR mapping templates (reg, stack, ir) (Push n) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "push" templates
         template' = setManyAttrib [("n", show n)] template
-collectInstrLLVMIR templates arity (reg, stack, ir) (Pop n) = (reg, stack, ir ++ [template'])
+translateToLLVMIR mapping templates (reg, stack, ir) (Pop n) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pop" templates
         template' = setManyAttrib [("n", show n)] template
--- TODO: change this not to allocate numbers on heap
-collectInstrLLVMIR templates arity (reg, stack, ir) (Pushint n) = (nextReg reg, stack, ir ++ [template'])
+-- TODO: change this not to allocate numbers on mapping
+translateToLLVMIR mapping templates (reg, stack, ir) (Pushint n) = (nextReg reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushint" templates
         template' = setManyAttrib [("n", show n)] template
-collectInstrLLVMIR templates arity (reg, stack, ir) (Pushglobal v) = (reg, stack, ir ++ [template'])
+translateToLLVMIR mapping templates (reg, stack, ir) (Pushglobal v) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushglobal" templates
         template' = setManyAttrib [("arity", show arity), ("name", mkFunName v)] template
-collectInstrLLVMIR templates arity (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
+        Just (arity, code) = Map.lookup v mapping
+translateToLLVMIR mapping templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkap" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Unwind) =  (reg, stack, ir)
+translateToLLVMIR mapping templates (reg, stack, ir) (Unwind) =  (reg, stack, ir)
     where
         Just template = getStringTemplate "unwind" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Eval) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (Eval) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "eval" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Pushbasic n) = (reg, stack, ir ++ [template'])
+translateToLLVMIR mapping templates (reg, stack, ir) (Pushbasic n) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushbasic" templates
         template' = setManyAttrib [("n", show n)] template
-collectInstrLLVMIR templates arity (reg, stack, ir) (Get) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (Get) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "get" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Add) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (Add) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "add" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Sub) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (Sub) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "sub" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Mul) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (Mul) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mul" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (Div) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (Div) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "div" templates
-collectInstrLLVMIR templates arity (reg, stack, ir) (MkInt) = (reg, stack, ir ++ [template])
+translateToLLVMIR mapping templates (reg, stack, ir) (MkInt) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkint" templates
-collectInstrLLVMIR templates arity state _ = state
+--translateToLLVMIR mapping templates (reg, stack, ir) (CasejumpSimple alts) = (reg, stack, ir ++ [template])
+--    where
+--        alts' = map translateAlt alts
+--        Just template = getStringTemplate "casejumpsimple" templates
+translateToLLVMIR mapping templates state instr = error $ "Instruction: " ++ show instr
 
 
+--translateAlt :: (Int, GmCode)
+--translateAlt (tag, code) =
+--    (reg, stack, ir) = foldl (\state@(reg, stack, ir) instr -> trace ("instr: " ++ show instr ++ "\nstack: " ++ show stack ++ "\n\n") (translateToLLVMIR templates arity state instr)) (initialReg, [], []) code
+--
 mkFunName :: String -> String
 mkFunName name =
     case Map.lookup name nameMapping of
         Just name' -> funPrefix ++ name'
         Nothing    -> funPrefix ++ name
-
---updateNumLLVMIR :: STGroup String -> Name -> [LLVMIR]
---updateNumLLVMIR templates name =
---    setManyAttrib [("intTag", show intTag), ("value", show n)] template
---    where Just template = getStringTemplate "update_int" templates
---
---updateGlobalLLVMIR :: STGroup String -> Name -> [LLVMIR]
---updateGlobalLLVMIR templates name =
---    setManyAttrib [("intTag", show globalTag), ("globalPtr", show n)] template
---    where Just template = getStringTemplate "update_global" templates
 
 
 renderTemplates :: [LLVMIR] -> [String]
