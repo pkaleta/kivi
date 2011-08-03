@@ -11,7 +11,6 @@ store i64 %globaltag, i64* %ptag
 store i64 $arity$, i64* %par
 store void()* @$name$, void()** %pcode
 
-
 ; store function cell address on the stack
 call void(i64*)* @push(i64* %ptag)
 

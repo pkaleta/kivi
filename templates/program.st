@@ -4,6 +4,7 @@ declare i8* @memcpy(i8*, i8*, i64)
 
 
 ; constants
+@getErrStr = internal constant [63 x i8] c"ERROR: Item different than expected found while running GMGet\\0A\\00"
 @s = internal constant [7 x i8] c"ERROR\\0A\\00"
 @snum = internal constant [6 x i8] c"%lld\\0A\\00"
 @NUM_TAG = global i64 1
@@ -48,6 +49,15 @@ define void @pushV(i64 %val) {
     call void(i64*)* @incSp(i64* @vsp)
 
     ret void
+}
+
+define i64 @popV() {
+    %ptop = call i64*()* @getTopV()
+    %val = load i64* %ptop
+
+    call void(i64*)* @decSp(i64* @vsp)
+
+    ret i64 %val
 }
 
 define void @incSp(i64* %sp) {
@@ -98,6 +108,56 @@ define i64* @getItemV(i64 %n) {
 ; *************** Utility functions
 
 
+define i64* @hAllocNum(i64 %n) {
+    %ptr = call i8*(i64)* @malloc(i64 16)
+    %ptag = bitcast i8* %ptr to i64*
+    %p8val = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
+    %pval = bitcast i8* %p8val to i64*
+
+    %numtag = load i64* @NUM_TAG
+    store i64 %numtag, i64* %ptag
+    store i64 %n, i64* %pval
+
+    ret i64* %ptag
+}
+
+define i64* @hAllocAp(i64* %a1, i64* %a2) {
+    %ptr = call i8*(i64)* @malloc(i64 24)
+    %ptag = bitcast i8* %ptr to i64*
+    %p8e1 = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
+    %pe1 = bitcast i8* %p8e1 to i64**
+    %p8e2 = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %ptag)
+    %pe2 = bitcast i8* %p8e2 to i64**
+
+    ; store the tag
+    %aptag = load i64* @AP_TAG
+    store i64 %aptag, i64* %ptag
+
+    ; store addresses
+    store i64* %a1, i64** %pe1
+    store i64* %a2, i64** %pe2
+
+    ret i64* %ptag
+}
+
+define i64* @hAllocGlobal(i64 %arity, void()* %funPtr) {
+    %ptr = call i8*(i64)* @malloc(i64 24)
+    %ptag = bitcast i8* %ptr to i64*
+    %p8ar = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
+    %par = bitcast i8* %p8ar to i64*
+    %p8code = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %ptag)
+    %pcode = bitcast i8* %p8code to void()**
+
+    ; save the tag
+    %globaltag = load i64* @GLOBAL_TAG
+    store i64 %globaltag, i64* %ptag
+
+    store i64 %arity, i64* %par
+    store void()* %funPtr, void()** %pcode
+
+    ret i64* %ptag
+}
+
 define i64 @getTag(i64** %addr) {
     %node = load i64** %addr
     %tag = load i64* %node
@@ -105,8 +165,21 @@ define i64 @getTag(i64** %addr) {
     ret i64 %tag
 }
 
-define i64 @nextWord() {
-    ret i64 0
+define i64 @getNum(i64** %addr) {
+    %ptag = load i64** %addr
+    %p8num = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
+    %pnum = bitcast i8* %p8num to i64*
+    %num = load i64* %pnum
+
+    ret i64 %num
+}
+
+define i8* @nextPtr(i64 %n, i64* %ptr) {
+    %1 = ptrtoint i64* %ptr to i64
+    %2 = mul i64 %n, 8
+    %3 = add i64 %2, %1
+    %4 = inttoptr i64 %3 to i8*
+    ret i8* %4
 }
 
 
@@ -136,16 +209,9 @@ define void @GMPop(i64 %n) {
 
 define void @GMPushint(i64 %n) {
     ; create the num node on the heap
-    %temp = call i8*(i64)* @malloc(i64 16)
-    %ptag = bitcast i8* %temp to i64*
-    %pvtag = ptrtoint i64* %ptag to i64
-    %pvval = add i64 8, %pvtag
-    %pval = inttoptr i64 %pvval to i64*
+    %ptag = call i64*(i64)* @hAllocNum(i64 %n)
 
-    %numtag = load i64* @NUM_TAG
-    store i64 %numtag, i64* %ptag
-    store i64 %n, i64* %pval
-
+    ; push node address onto the stack
     call void(i64*)* @push(i64* %ptag)
 
     ret void
@@ -161,32 +227,13 @@ define void @GMMkap() {
     %a2 = load i64** %pa2
 
     ; create application node on the heap
-    %temp = call i8*(i64)* @malloc(i64 24)
-    %ptag = bitcast i8* %temp to i64*
-    %pvtag = ptrtoint i64* %ptag to i64
-    %pve1 = add i64 %pvtag, 8
-    %pe1 = inttoptr i64 %pve1 to i64**
-    %pve2 = add i64 %pvtag, 16
-    %pe2 = inttoptr i64 %pve2 to i64**
-
-    ; store the tag
-    %aptag = load i64* @AP_TAG
-    store i64 %aptag, i64* %ptag
-
-    ; store addresses
-    store i64* %a1, i64** %pe1
-    store i64* %a2, i64** %pe2
-
-
-;    %1 = load i64* %a2
-;    call void(i64)* @debug(i64 100000)
-;    call void(i64)* @debug(i64 %1)
-
+    %ap = call i64*(i64*, i64*)* @hAllocAp(i64* %a1, i64* %a2)
 
     ; pop 2 elements from the stack
     store i64 %vsp2, i64* @sp
 
-    call void(i64*)* @push(i64* %ptag)
+    ; push the newly allocated appliation node address onto the stack
+    call void(i64*)* @push(i64* %ap)
 
     ret void
 }
@@ -327,6 +374,52 @@ DONE_UNWIND:
     ret void
 }
 
+define void @GMPushbasic(i64 %n) {
+    call void(i64)* @pushV(i64 %n)
+
+    ret void
+}
+
+define void @GMGet() {
+    %ptop = call i64**()* @getTop()
+    %tag = call i64(i64**)* @getTag(i64** %ptop)
+
+    switch i64 %tag, label %NOT_FOUND [ i64 1, label %NUM ]
+
+NUM:
+    %num = call i64(i64**)* @getNum(i64** %ptop)
+    call void(i64)* @pushV(i64 %num)
+    br label %DONE
+
+NOT_FOUND:
+    %ps = getelementptr [63 x i8]* @getErrStr, i64 0, i64 0
+    call i64 (i8 *, ...)* @printf(i8* %ps)
+    br label %DONE
+
+DONE:
+    ret void
+}
+
+define void @GMAdd() {
+    %a = call i64()* @popV()
+    %b = call i64()* @popV()
+    %res = add i64 %a, %b
+    call void(i64)* @pushV(i64 %res)
+
+    ret void
+}
+
+define void @GMMkInt() {
+    %n = call i64()* @popV()
+
+    ; alloc num node on the heap
+    %num = call i64*(i64)* @hAllocNum(i64 %n)
+
+    ; push address onto the stack
+    call void(i64*)* @push(i64* %num)
+
+    ret void
+}
 
 define i64 @main() {
     store i64 0, i64* @sp

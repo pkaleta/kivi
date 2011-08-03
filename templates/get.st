@@ -1,0 +1,2 @@
+call void()* @GMGet()
+

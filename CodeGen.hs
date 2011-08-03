@@ -132,6 +132,19 @@ collectInstrLLVMIR templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [templ
 collectInstrLLVMIR templates (reg, stack, ir) (Eval) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "eval" templates
+collectInstrLLVMIR templates (reg, stack, ir) (Pushbasic n) = (reg, stack, ir ++ [template'])
+    where
+        Just template = getStringTemplate "pushbasic" templates
+        template' = setManyAttrib [("n", show n)] template
+collectInstrLLVMIR templates (reg, stack, ir) (Get) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "get" templates
+collectInstrLLVMIR templates (reg, stack, ir) (Add) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "add" templates
+collectInstrLLVMIR templates (reg, stack, ir) (MkInt) = (reg, stack, ir ++ [template])
+    where
+        Just template = getStringTemplate "mkint" templates
 collectInstrLLVMIR templates state _ = state
 
 
