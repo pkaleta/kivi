@@ -156,7 +156,7 @@ translateToLLVMIR mapping templates (reg, stack, ir) (Pushglobal v) = (reg, stac
 translateToLLVMIR mapping templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkap" templates
-translateToLLVMIR mapping templates (reg, stack, ir) (Unwind) =  (reg, stack, ir)
+translateToLLVMIR mapping templates (reg, stack, ir) (Unwind) =  (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "unwind" templates
 translateToLLVMIR mapping templates (reg, stack, ir) (Eval) = (reg, stack, ir ++ [template])
