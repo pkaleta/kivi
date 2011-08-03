@@ -1,4 +1,4 @@
-define void @_$name$() {
+define void @$name$() {
     $body$
     ret void
 }

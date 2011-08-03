@@ -13,6 +13,7 @@ import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
+import Data.Map as Map
 --import Data.String.Lazy (String)
 import Text.StringTemplate
 
@@ -24,6 +25,23 @@ data LLVMValue = LLVMNum Int
                | LLVMReg Reg
                | LLVMStackAddr Int
     deriving Show
+
+
+nameMapping = Map.fromList [("+", "add"),
+                            ("-", "sub"),
+                            ("*", "mul"),
+                            ("/", "div"),
+                            ("negate", "negate"),
+                            ("==", "eq"),
+                            ("!=", "ne"),
+                            ("<", "l"),
+                            ("<=", "le"),
+                            (">", "g"),
+                            (">=", "ge")]
+
+
+funPrefix :: String
+funPrefix = "_"
 
 
 numTag :: Int
@@ -78,14 +96,14 @@ genProgramLLVMIR templates program@(adts, scs) =
 
 genScsLLVMIR :: GmHeap -> STGroup String -> Assoc Name Addr -> [LLVMIR]
 genScsLLVMIR heap templates globals =
-    map (mapScDefn heap template templates) globals
+    Prelude.map (mapScDefn heap template templates) globals
     where
         Just template = getStringTemplate "sc" templates
 
 
 mapScDefn :: GmHeap -> LLVMIR -> STGroup String -> (Name, Addr) -> LLVMIR
 mapScDefn heap template templates (name, addr) =
-    setAttribute "body" body $ setAttribute "name" name template
+    setAttribute "body" body $ setAttribute "name" (mkFunName name) template
     where
         (NGlobal arity code) = hLookup heap addr
         body = trace ("\n\n" ++ show code ++ "\n\n") renderTemplates $ genScLLVMIR templates arity code
@@ -122,8 +140,7 @@ collectInstrLLVMIR templates arity (reg, stack, ir) (Pushint n) = (nextReg reg, 
 collectInstrLLVMIR templates arity (reg, stack, ir) (Pushglobal v) = (reg, stack, ir ++ [template'])
     where
         Just template = getStringTemplate "pushglobal" templates
--- TODO: fix arity
-        template' = setManyAttrib [("arity", show arity), ("name", "_" ++ v)] template
+        template' = setManyAttrib [("arity", show arity), ("name", mkFunName v)] template
 collectInstrLLVMIR templates arity (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkap" templates
@@ -157,6 +174,12 @@ collectInstrLLVMIR templates arity (reg, stack, ir) (MkInt) = (reg, stack, ir ++
         Just template = getStringTemplate "mkint" templates
 collectInstrLLVMIR templates arity state _ = state
 
+
+mkFunName :: String -> String
+mkFunName name =
+    case Map.lookup name nameMapping of
+        Just name' -> funPrefix ++ name'
+        Nothing    -> funPrefix ++ name
 
 --updateNumLLVMIR :: STGroup String -> Name -> [LLVMIR]
 --updateNumLLVMIR templates name =
