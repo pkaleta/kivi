@@ -16,17 +16,19 @@ type GmEnvironment = Assoc Name Int
 
 
 primitiveScs :: [CoreScDefn]
-primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
-                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
-                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
-                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
-                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
-                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
-                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
-                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
-                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
-                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
-                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")))]
+--primitiveScs = []
+primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y")))
+--                , (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
+--                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
+--                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
+--                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
+--                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
+--                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
+--                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
+--                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
+--                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
+--                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")))
+                ]
 
 
 selFunName :: Int -> Int -> String

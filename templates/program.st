@@ -30,7 +30,7 @@ define void @debug(i64 %x) {
 define void @push(i64* %addr) {
     ; store address on stack
     %n = load i64* @sp
-    %ptop = call i64**(i64)* @getItem(i64 %n)
+    %ptop = call i64**(i64)* @getItemPtr(i64 %n)
     store i64* %addr, i64** %ptop
 
     ; increment stack pointer
@@ -39,10 +39,27 @@ define void @push(i64* %addr) {
     ret void
 }
 
+define i64** @getTopPtr() {
+    %n = load i64* @sp
+    %n1 = sub i64 %n, 1
+    %topPtr = call i64**(i64)* @getItemPtr(i64 %n1)
+
+    ret i64** %topPtr
+}
+
+define i64** @getItemPtr(i64 %n) {
+    %item = getelementptr [1000 x i64*]* @stack, i64 0, i64 %n
+
+    ret i64** %item
+}
+
+
+; **************** Runtime vstack operations
+
 define void @pushV(i64 %val) {
     ; store address on stack
     %n = load i64* @vsp
-    %ptop = call i64*(i64)* @getItemV(i64 %n)
+    %ptop = call i64*(i64)* @getItemVPtr(i64 %n)
     store i64 %val, i64* %ptop
 
     ; increment stack pointer
@@ -52,13 +69,29 @@ define void @pushV(i64 %val) {
 }
 
 define i64 @popV() {
-    %ptop = call i64*()* @getTopV()
+    %ptop = call i64*()* @getTopVPtr()
     %val = load i64* %ptop
 
     call void(i64*)* @decSp(i64* @vsp)
 
     ret i64 %val
 }
+
+define i64* @getTopVPtr() {
+    %n = load i64* @vsp
+    %n1 = sub i64 %n, 1
+    %item = call i64*(i64)* @getItemVPtr(i64 %n1)
+
+    ret i64* %item
+}
+
+define i64* @getItemVPtr(i64 %n) {
+    %ptr = getelementptr [1000 x i64]* @vstack, i64 0, i64 %n
+
+    ret i64* %ptr
+}
+
+; **************** Generic stack operations
 
 define void @incSp(i64* %sp) {
     %n = load i64* %sp
@@ -76,43 +109,13 @@ define void @decSp(i64* %sp) {
     ret void
 }
 
-define i64** @getTop() {
-    %n = load i64* @sp
-    %n1 = sub i64 %n, 1
-    %item = call i64**(i64)* @getItem(i64 %n1)
 
-    ret i64** %item
-}
-
-define i64* @getTopV() {
-    %n = load i64* @vsp
-    %n1 = sub i64 %n, 1
-    %item = call i64*(i64)* @getItemV(i64 %n1)
-
-    ret i64* %item
-}
-
-define i64** @getItem(i64 %n) {
-    %item = getelementptr [1000 x i64*]* @stack, i64 0, i64 %n
-
-    ret i64** %item
-}
-
-define i64* @getItemV(i64 %n) {
-    %item = getelementptr [1000 x i64]* @vstack, i64 0, i64 %n
-
-    ret i64* %item
-}
-
-
-; *************** Utility functions
-
+; *************** Heap allocation functions
 
 define i64* @hAllocNum(i64 %n) {
     %ptr = call i8*(i64)* @malloc(i64 16)
     %ptag = bitcast i8* %ptr to i64*
-    %p8val = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
-    %pval = bitcast i8* %p8val to i64*
+    %pval = call i64*(i64*)* @getNumPtr(i64* %ptag)
 
     %numtag = load i64* @NUM_TAG
     store i64 %numtag, i64* %ptag
@@ -124,18 +127,16 @@ define i64* @hAllocNum(i64 %n) {
 define i64* @hAllocAp(i64* %a1, i64* %a2) {
     %ptr = call i8*(i64)* @malloc(i64 24)
     %ptag = bitcast i8* %ptr to i64*
-    %p8e1 = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
-    %pe1 = bitcast i8* %p8e1 to i64**
-    %p8e2 = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %ptag)
-    %pe2 = bitcast i8* %p8e2 to i64**
+    %pfun = call i64**(i64*)* @getFunPtr(i64* %ptag)
+    %parg = call i64**(i64*)* @getArgPtr(i64* %ptag)
 
     ; store the tag
     %aptag = load i64* @AP_TAG
     store i64 %aptag, i64* %ptag
 
     ; store addresses
-    store i64* %a1, i64** %pe1
-    store i64* %a2, i64** %pe2
+    store i64* %a1, i64** %pfun
+    store i64* %a2, i64** %parg
 
     ret i64* %ptag
 }
@@ -143,35 +144,60 @@ define i64* @hAllocAp(i64* %a1, i64* %a2) {
 define i64* @hAllocGlobal(i64 %arity, void()* %funPtr) {
     %ptr = call i8*(i64)* @malloc(i64 24)
     %ptag = bitcast i8* %ptr to i64*
-    %p8ar = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
-    %par = bitcast i8* %p8ar to i64*
-    %p8code = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %ptag)
-    %pcode = bitcast i8* %p8code to void()**
+    %parity = call i64*(i64*)* @getArityPtr(i64* %ptag)
+    %pcode = call void()**(i64*)* @getCodePtr(i64* %ptag)
 
     ; save the tag
     %globaltag = load i64* @GLOBAL_TAG
     store i64 %globaltag, i64* %ptag
 
-    store i64 %arity, i64* %par
+    store i64 %arity, i64* %parity
     store void()* %funPtr, void()** %pcode
 
     ret i64* %ptag
 }
 
-define i64 @getTag(i64** %addr) {
-    %node = load i64** %addr
-    %tag = load i64* %node
+; *************** Utility functions
+
+define i64 @getTag(i64* %addr) {
+    %tag = load i64* %addr
 
     ret i64 %tag
 }
 
-define i64 @getNum(i64** %addr) {
-    %ptag = load i64** %addr
-    %p8num = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %ptag)
+define i64* @getNumPtr(i64* %addr) {
+    %p8num = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %addr)
     %pnum = bitcast i8* %p8num to i64*
-    %num = load i64* %pnum
 
-    ret i64 %num
+    ret i64* %pnum
+}
+
+define i64** @getFunPtr(i64* %addr) {
+    %p8fun = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %addr)
+    %pfun = bitcast i8* %p8fun to i64**
+
+    ret i64** %pfun
+}
+
+define i64** @getArgPtr(i64* %addr) {
+    %p8arg = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %addr)
+    %parg = bitcast i8* %p8arg to i64**
+
+    ret i64** %parg
+}
+
+define i64* @getArityPtr(i64* %addr) {
+    %p8arity = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %addr)
+    %parity = bitcast i8* %p8arity to i64*
+
+    ret i64* %parity
+}
+
+define void()** @getCodePtr(i64* %addr) {
+    %p8code = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %addr)
+    %pcode = bitcast i8* %p8code to void()**
+
+    ret void()** %pcode
 }
 
 define i8* @nextPtr(i64 %n, i64* %ptr) {
@@ -239,7 +265,7 @@ define void @GMMkap() {
 }
 
 define void @GMUpdate(i64 %n) {
-    %ptop = call i64**()* @getTop()
+    %ptop = call i64**()* @getTopPtr()
     %top = load i64** %ptop
 
     ; update the nth node on the stack to hold the same value as the top node
@@ -270,7 +296,7 @@ NUM_EVAL:
 
 AP_EVAL:
     call void()* @GMUnwind()
-    ret void
+    br label %DONE_EVAL
 
 GLOB_EVAL:
     br label %DONE_EVAL
@@ -340,23 +366,18 @@ NUM_UNWIND:
     br label %DONE_UNWIND
 
 AP_UNWIND:
-    %ap.pvtag = ptrtoint i64* %ptag to i64
-    %pve1 = add i64 8, %ap.pvtag
-    %pe1 = inttoptr i64 %pve1 to i64**
-    %e1 = load i64** %pe1
-    call void(i64*)* @push(i64* %e1)
+    %pfun = call i64**(i64*)* @getFunPtr(i64* %ptag)
+    %fun = load i64** %pfun
+    call void(i64*)* @push(i64* %fun)
     call void()* @GMUnwind()
     br label %DONE_UNWIND
 
 GLOB_UNWIND:
     ; TODO: check for correct number of args, rearrange stack
-    %glob.pvtag = ptrtoint i64* %ptag to i64
-    %pvar = add i64 8, %glob.pvtag
-    %par = inttoptr i64 %pvar to i64*
-    %arity = load i64* %par
-    %pvcode = add i64 16, %glob.pvtag
-    %pcode = inttoptr i64 %pvcode to void()**
-    %fun = load void()** %pcode
+    %parity = call i64*(i64*)* @getArityPtr(i64* %ptag)
+    %pcode = call void()**(i64*)* @getCodePtr(i64* %ptag)
+    %arity = load i64* %parity
+    %code = load void()** %pcode
 
     ; arguments check
 
@@ -364,7 +385,7 @@ GLOB_UNWIND:
     call void(i64)* @rearrange(i64 %arity)
 
     ; call the function
-    call void()* %fun()
+    call void()* %code()
     br label %DONE_UNWIND
 
 otherwise:
@@ -381,13 +402,16 @@ define void @GMPushbasic(i64 %n) {
 }
 
 define void @GMGet() {
-    %ptop = call i64**()* @getTop()
-    %tag = call i64(i64**)* @getTag(i64** %ptop)
+    %ptop = call i64**()* @getTopPtr()
+    %top = load i64** %ptop
+    %tag = call i64(i64*)* @getTag(i64* %top)
 
     switch i64 %tag, label %NOT_FOUND [ i64 1, label %NUM ]
 
 NUM:
-    %num = call i64(i64**)* @getNum(i64** %ptop)
+    %pnum = call i64*(i64*)* @getNumPtr(i64* %top)
+    %num = load i64* %pnum
+
     call void(i64)* @pushV(i64 %num)
     br label %DONE
 
@@ -453,8 +477,9 @@ define i64 @main() {
     store i64 0, i64* @vsp
     call void()* @_main()
 
-    %ptop = call i64**()* @getTop()
-    %tag = call i64(i64**)* @getTag(i64** %ptop)
+    %ptop = call i64**()* @getTopPtr()
+    %ptag = load i64** %ptop
+    %tag = call i64(i64*)* @getTag(i64* %ptag)
 
     switch i64 %tag, label %ERROR [i64 1, label %NUM]
 
@@ -464,11 +489,8 @@ ERROR:
     %err = add i64 0, 0
     ret i64 %err
 NUM:
-    %ptag = load i64** %ptop
     %psnum = getelementptr [6 x i8]* @snum, i64 0, i64 0
-    %ptagval = ptrtoint i64* %ptag to i64
-    %pnumval = add i64 8, %ptagval
-    %pnum = inttoptr i64 %pnumval to i64*
+    %pnum = call i64*(i64*)* @getNumPtr(i64* %ptag)
     %num = load i64* %pnum
     call i64 (i8 *, ...)* @printf(i8* %psnum, i64 %num)
     ret i64 0
