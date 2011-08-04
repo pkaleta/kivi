@@ -39,6 +39,15 @@ define void @push(i64* %addr) {
     ret void
 }
 
+define i64* @pop() {
+    %ptop = call i64**()* @getTopPtr()
+    %addr = load i64** %ptop
+
+    call void(i64*)* @decSp(i64* @sp)
+
+    ret i64* %addr
+}
+
 define i64** @getTopPtr() {
     %n = load i64* @sp
     %n1 = sub i64 %n, 1
@@ -402,8 +411,7 @@ define void @GMPushbasic(i64 %n) {
 }
 
 define void @GMGet() {
-    %ptop = call i64**()* @getTopPtr()
-    %top = load i64** %ptop
+    %top = call i64*()* @pop()
     %tag = call i64(i64*)* @getTag(i64* %top)
 
     switch i64 %tag, label %NOT_FOUND [ i64 1, label %NUM ]
