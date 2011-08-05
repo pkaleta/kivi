@@ -100,8 +100,8 @@ dispatch Le                  = le
 dispatch Gt                  = gt
 dispatch Ge                  = ge
 dispatch (Pack t n)          = pack t n
-dispatch (CasejumpSimple bs) = casejumpSimple bs
-dispatch (CasejumpConstr bs) = casejumpConstr bs
+dispatch (CasejumpSimple bs) = casejump bs
+dispatch (CasejumpConstr bs) = casejump bs
 dispatch (Split n)           = split2 n
 dispatch (Print)             = print2
 dispatch (Pushbasic n)       = pushbasic n
@@ -301,14 +301,6 @@ pack t n state =
         stack' = addr : (drop n stack)
         (heap', addr) = hAlloc (getHeap state) (NConstr t $ take n stack)
         stack = getStack state
-
-
-casejumpSimple :: Assoc Int GmCode -> GmState -> GmState
-casejumpSimple = casejump
-
-
-casejumpConstr :: Assoc Int GmCode -> GmState -> GmState
-casejumpConstr = casejump
 
 
 casejump :: Assoc Int GmCode -> GmState -> GmState

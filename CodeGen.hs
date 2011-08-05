@@ -95,12 +95,12 @@ genLLVMIR program = do
 
 genProgramLLVMIR :: STGroup String -> CoreProgram -> LLVMIR
 genProgramLLVMIR templates program@(adts, scs) =
-    setAttribute "scs" (renderTemplates scsTemplates) t
+    setAttribute "scs" (renderTemplates scsTemplates) template
     where
         state = compile program
         globals = getGlobals state
         heap = getHeap state
-        Just t = getStringTemplate "program" templates
+        Just template = getStringTemplate "program" templates
         mapping = createNameArityCodeMapping heap globals
         scsTemplates = genScsLLVMIR mapping templates globals
 
@@ -152,7 +152,7 @@ translateToLLVMIR mapping templates (reg, stack, ir) (Pushglobal v) = (reg, stac
     where
         Just template = getStringTemplate "pushglobal" templates
         template' = setManyAttrib [("arity", show arity), ("name", mkFunName v)] template
-        Just (arity, code) = Map.lookup v mapping
+        Just (arity, code) = trace ("********** " ++ show v)Map.lookup v mapping
 translateToLLVMIR mapping templates (reg, stack, ir) (Mkap) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkap" templates
@@ -184,17 +184,34 @@ translateToLLVMIR mapping templates (reg, stack, ir) (Div) = (reg, stack, ir ++ 
 translateToLLVMIR mapping templates (reg, stack, ir) (MkInt) = (reg, stack, ir ++ [template])
     where
         Just template = getStringTemplate "mkint" templates
---translateToLLVMIR mapping templates (reg, stack, ir) (CasejumpSimple alts) = (reg, stack, ir ++ [template])
---    where
---        alts' = map translateAlt alts
---        Just template = getStringTemplate "casejumpsimple" templates
+translateToLLVMIR mapping templates (reg, stack, ir) (CasejumpSimple alts) = (reg, stack, ir ++ [caseTmpl'])
+    where
+        alts' = Prelude.map (translateAlt mapping templates) alts
+        tags = Prelude.map fst alts'
+        Just caseTmpl = getStringTemplate "casejumpsimple" templates
+        caseTmpl' = setAttribute "alts" (renderTemplates altsIR) $ setAttribute "tags" (tags::[Int]) caseTmpl
+        Just altTmpl = getStringTemplate "alt" templates
+        altsIR = foldl (translateAlts altTmpl) [] alts'
+translateToLLVMIR mapping templates state (Error msg) = state
 translateToLLVMIR mapping templates state instr = error $ "Instruction: " ++ show instr
 
 
---translateAlt :: (Int, GmCode)
---translateAlt (tag, code) =
---    (reg, stack, ir) = foldl (\state@(reg, stack, ir) instr -> trace ("instr: " ++ show instr ++ "\nstack: " ++ show stack ++ "\n\n") (translateToLLVMIR templates arity state instr)) (initialReg, [], []) code
---
+translateAlts :: StringTemplate String -> [LLVMIR] -> (Int, [LLVMIR]) -> [LLVMIR]
+translateAlts altTmpl irAcc (tag, ir) = irAcc ++ [altTmpl']
+    where
+        altTmpl' = setAttribute "tag" (show tag) $ setAttribute "code" (renderTemplates ir) $ altTmpl
+
+
+translateAlt :: NameArityCodeMapping
+             -> STGroup String
+             -> (Int, GmCode)
+             -> (Int, [LLVMIR])
+translateAlt mapping templates (tag, code) = (tag, ir)
+    where
+        initialState = (initialReg, [], [])
+        (reg, stack, ir) = foldl (translateToLLVMIR mapping templates) initialState code
+
+
 mkFunName :: String -> String
 mkFunName name =
     case Map.lookup name nameMapping of
