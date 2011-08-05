@@ -3,11 +3,12 @@
 %pnum = call i64*(i64*)* @getNumPtr(i64* %top)
 %num = load i64* %pnum
 
-switch i64 %num, label %NOT_FOUND [ $tags:switchtest(); separator=" "$ ]
+switch i64 %num, label %ALT-1 [ $tags:switchtest(); separator=" "$ ]
 
 $alts$
 
-NOT_FOUND:
-    ret void
+DEFAULT:
+    $defaultCode$
+    br label %END_CASE
 
 END_CASE:

@@ -253,19 +253,11 @@ define void @GMPushint(i64 %n) {
 }
 
 define void @GMMkap() {
-    %vsp = load i64* @sp
-    %vsp1 = sub i64 %vsp, 1
-    %vsp2 = sub i64 %vsp, 2
-    %pa1 = getelementptr [1000 x i64*]* @stack, i64 0, i64 %vsp1
-    %a1 = load i64** %pa1
-    %pa2 = getelementptr [1000 x i64*]* @stack, i64 0, i64 %vsp2
-    %a2 = load i64** %pa2
+    %fun = call i64*()* @pop()
+    %arg = call i64*()* @pop()
 
     ; create application node on the heap
-    %ap = call i64*(i64*, i64*)* @hAllocAp(i64* %a1, i64* %a2)
-
-    ; pop 2 elements from the stack
-    store i64 %vsp2, i64* @sp
+    %ap = call i64*(i64*, i64*)* @hAllocAp(i64* %fun, i64* %arg)
 
     ; push the newly allocated appliation node address onto the stack
     call void(i64*)* @push(i64* %ap)
@@ -274,25 +266,22 @@ define void @GMMkap() {
 }
 
 define void @GMUpdate(i64 %n) {
-    %ptop = call i64**()* @getTopPtr()
-    %top = load i64** %ptop
+    %top = call i64*()* @pop()
 
     ; update the nth node on the stack to hold the same value as the top node
     %vsp = load i64* @sp
     %n1 = add i64 %n, 1
     %rootIndex = sub i64 %vsp, %n1
-    %toUpdate = getelementptr [1000 x i64*]* @stack, i64 0, i64 %rootIndex
+    %toUpdate = call i64**(i64)* @getItemPtr(i64 %rootIndex)
     store i64* %top, i64** %toUpdate
 
     ret void
 }
 
 define void @GMEval() {
-    %vsp = load i64* @sp
-    %vsp1 = sub i64 %vsp, 1
-    %ptr = getelementptr [1000 x i64*]* @stack, i64 0, i64 %vsp1
-    %addr = load i64** %ptr
-    %tag = load i64* %addr
+    %ptop = call i64**()* @getTopPtr()
+    %top = load i64** %ptop
+    %tag = load i64* %top
 
     switch i64 %tag, label %otherwise [ i64 1, label %NUM_EVAL
                                         i64 2, label %AP_EVAL
@@ -339,14 +328,14 @@ NEXT_ELEM:
     ; rearrange item
     %cur = load i64* %item
     %cur1 = sub i64 %cur, 1
-    %pap = getelementptr [1000 x i64*]* @stack, i64 0, i64 %cur1
+    %pap = call i64**(i64)* @getItemPtr(i64 %cur1)
     %ap = load i64** %pap
     %pvtag = ptrtoint i64* %ap to i64
     %pve2 = add i64 16, %pvtag
     %pe2 = inttoptr i64 %pve2 to i64**
     %e2 = load i64** %pe2
 
-    %pcur = getelementptr [1000 x i64*]* @stack, i64 0, i64 %cur
+    %pcur = call i64**(i64)* @getItemPtr(i64 %cur)
     store i64* %e2, i64** %pcur
 
     ; get next element in the stack
@@ -361,11 +350,9 @@ END:
 
 
 define void @GMUnwind() {
-    %vsp = load i64* @sp
-    %vsp1 = sub i64 %vsp, 1
-    %ptr = getelementptr [1000 x i64*]* @stack, i64 0, i64 %vsp1
-    %ptag = load i64** %ptr
-    %tag = load i64* %ptag
+    %ptop = call i64**()* @getTopPtr()
+    %top = load i64** %ptop
+    %tag = load i64* %top
 
     switch i64 %tag, label %otherwise [ i64 1, label %NUM_UNWIND
                                         i64 2, label %AP_UNWIND
@@ -375,7 +362,7 @@ NUM_UNWIND:
     br label %DONE_UNWIND
 
 AP_UNWIND:
-    %pfun = call i64**(i64*)* @getFunPtr(i64* %ptag)
+    %pfun = call i64**(i64*)* @getFunPtr(i64* %top)
     %fun = load i64** %pfun
     call void(i64*)* @push(i64* %fun)
     call void()* @GMUnwind()
@@ -383,8 +370,8 @@ AP_UNWIND:
 
 GLOB_UNWIND:
     ; TODO: check for correct number of args, rearrange stack
-    %parity = call i64*(i64*)* @getArityPtr(i64* %ptag)
-    %pcode = call void()**(i64*)* @getCodePtr(i64* %ptag)
+    %parity = call i64*(i64*)* @getArityPtr(i64* %top)
+    %pcode = call void()**(i64*)* @getCodePtr(i64* %top)
     %arity = load i64* %parity
     %code = load void()** %pcode
 

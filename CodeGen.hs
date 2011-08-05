@@ -13,7 +13,7 @@ import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
-import Data.Map as Map
+import Data.Map as Map hiding (map, filter)
 --import Data.String.Lazy (String)
 import Text.StringTemplate
 
@@ -107,7 +107,7 @@ genProgramLLVMIR templates program@(adts, scs) =
 
 genScsLLVMIR :: NameArityCodeMapping -> STGroup String -> Assoc Name Addr -> [LLVMIR]
 genScsLLVMIR mapping templates globals =
-    Prelude.map (mapScDefn mapping template templates) globals
+    map (mapScDefn mapping template templates) globals
     where
         Just template = getStringTemplate "sc" templates
 
@@ -186,8 +186,8 @@ translateToLLVMIR mapping templates (reg, stack, ir) (MkInt) = (reg, stack, ir +
         Just template = getStringTemplate "mkint" templates
 translateToLLVMIR mapping templates (reg, stack, ir) (CasejumpSimple alts) = (reg, stack, ir ++ [caseTmpl'])
     where
-        alts' = Prelude.map (translateAlt mapping templates) alts
-        tags = Prelude.map fst alts'
+        alts' = map (translateAlt mapping templates) alts
+        tags = filter (>= 0) $ map fst alts'
         Just caseTmpl = getStringTemplate "casejumpsimple" templates
         caseTmpl' = setAttribute "alts" (renderTemplates altsIR) $ setAttribute "tags" (tags::[Int]) caseTmpl
         Just altTmpl = getStringTemplate "alt" templates
