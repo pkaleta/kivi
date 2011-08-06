@@ -80,6 +80,7 @@ step state =
 dispatch :: Instruction -> GmState -> GmState
 dispatch Unwind              = unwind
 dispatch (Pushglobal f)      = pushglobal f
+dispatch (Pushconstr t a)    = pushconstr t a
 dispatch (Pushint n)         = pushint n
 dispatch (Push n)            = push n
 dispatch Mkap                = mkap
@@ -145,35 +146,34 @@ unwindDump state =
         (code, stack, vstack) : ds = getDump state
         addr = head $ getStack state
 
+
 pushglobal :: Name -> GmState -> GmState
 pushglobal name state =
-    case take 4 name == "Pack" of
-        True -> pushglobalPack name state
-        False -> pushglobalNormal name state
+    putStack stack' state
+    where
+        addr = aLookup (getGlobals state) name $ error $ "Undeclared global identifier: " ++ name
+        stack' = addr : getStack state
 
-pushglobalPack :: Name -> GmState -> GmState
-pushglobalPack name state =
+
+pushconstr :: Int -> Int -> GmState -> GmState
+pushconstr tag arity state =
     case aHasKey globals name of
         True ->
             putStack (addr : stack) state
             where
                 addr = aLookup globals name $ error "This is not possible"
         False ->
-            putStack (addr : stack) $ putHeap heap' state
+            putStack stack' $ putHeap heap' $ putGlobals globals' $ state
             where
-                (heap', addr) = hAlloc heap $ NGlobal n [Pack t n, Update 0, Unwind]
-                [t, n] = map read $ Data.List.Utils.split "," (name =~ "[0-9]+,[0-9]+" :: String)
+                globals' = (name, addr) : globals
+                stack' = addr : stack
+                (heap', addr) = hAlloc heap $ NGlobal arity [Pack tag arity, Update 0, Unwind]
     where
+        name = "Pack{" ++ show tag ++ "," ++ show arity ++ "}"
         globals = getGlobals state
         stack = getStack state
         heap = getHeap state
 
-pushglobalNormal :: Name -> GmState -> GmState
-pushglobalNormal name state =
-    putStack stack' state
-    where
-        addr = aLookup (getGlobals state) name $ error $ "Undeclared global identifier: " ++ name
-        stack' = addr : getStack state
 
 pushint :: Int -> GmState -> GmState
 pushint n state =

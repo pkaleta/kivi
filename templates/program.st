@@ -11,6 +11,7 @@ declare i8* @memcpy(i8*, i8*, i64)
 @AP_TAG = global i64 2
 @GLOBAL_TAG = global i64 3
 @IND_TAG = global i64 4
+@CONS_TAG = global i64 5
 
 ; globals
 @vstack = global [1000 x i64] undef

@@ -17,9 +17,9 @@ type GmEnvironment = Assoc Name Int
 
 primitiveScs :: [CoreScDefn]
 --primitiveScs = []
-primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y")))
---                , (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
---                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
+primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
+                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
+                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y")))
 --                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
 --                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
 --                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
@@ -198,7 +198,7 @@ compileC (EVar v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This is not possible"]
         False -> [Pushglobal v]
-compileC (EConstr t n) env = [Pushglobal $ constrFunctionName t n]
+compileC (EConstr t n) env = [Pushconstr t n]
 compileC (EAp e1 e2) env =
     compileC e2 env ++
     compileC e1 (argOffset 1 env) ++
@@ -215,9 +215,6 @@ compileC (ECaseConstr expr alts) env =
     compileE expr env ++ [CasejumpConstr $ compileD compileE alts $ argOffset 1 env]
 compileC (EError msg) env = [Error msg]
 compileC x env = error $ "Compilation scheme for the following expression does not exist: " ++ show x
-
-
-constrFunctionName t n = "Pack{" ++ show t ++ "," ++ show n ++ "}"
 
 
 compileLet :: [Instruction] -> GmCompiler -> [(Name, CoreExpr)] -> GmCompiler

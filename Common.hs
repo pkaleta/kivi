@@ -71,6 +71,7 @@ type GmCode = [Instruction]
 
 data Instruction = Unwind
                  | Pushglobal Name
+                 | Pushconstr Int Int
                  | Pushint Int
                  | Push Int
                  | Mkap
