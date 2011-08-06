@@ -79,10 +79,10 @@ codegenPath = "codegen/"
 createNameArityCodeMapping :: GmHeap -> GmGlobals -> NameArityCodeMapping
 createNameArityCodeMapping heap globals = Map.fromList [createEntry heap name addr | (name, addr) <- globals]
 
+
 createEntry :: GmHeap -> Name -> Addr -> (Name, (Arity, GmCode))
 createEntry heap name addr = (name, (arity, code))
     where (NGlobal arity code) = hLookup heap addr
-
 
 
 saveLLVMIR :: IO (LLVMIR) -> IO ()
@@ -101,7 +101,7 @@ genLLVMIR program = do
 
 genProgramLLVMIR :: STGroup String -> CoreProgram -> LLVMIR
 genProgramLLVMIR templates program@(adts, scs) =
-    setAttribute "scs" (renderTemplates scsTemplates) template
+    setManyAttrib [("scs", renderTemplates scsTemplates), ("constrFuns", renderTemplates constrs')] template
     where
         state = compile program
         globals = getGlobals state
@@ -109,6 +109,21 @@ genProgramLLVMIR templates program@(adts, scs) =
         Just template = getStringTemplate "program" templates
         mapping = createNameArityCodeMapping heap globals
         scsTemplates = genScsLLVMIR mapping templates globals
+        constrs = concat $ map snd adts
+        constrs' = foldl (createConstr templates) [] constrs
+
+
+createConstr :: STGroup String -> [StringTemplate String] -> Constructor -> [StringTemplate String]
+createConstr templates constrs (name, tag, arity) = constrTmpl' : constrs
+    where
+        Just packTmpl = getStringTemplate "pack" templates
+        packTmpl' = setManyAttrib [("tag", show tag), ("arity", show arity), ("ninstr", "0")] packTmpl
+
+        Just updateTmpl = getStringTemplate "update" templates
+        updateTmpl' = setManyAttrib [("n", "0"), ("ninstr", "1")] updateTmpl
+
+        Just constrTmpl = getStringTemplate "constr" templates
+        constrTmpl' = setManyAttrib [("tag", show tag), ("arity", show arity), ("update", render updateTmpl'), ("pack", render packTmpl')] constrTmpl
 
 
 genScsLLVMIR :: NameArityCodeMapping -> STGroup String -> Assoc Name Addr -> [LLVMIR]
@@ -207,6 +222,11 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (CasejumpSimple alt
         caseTmpl' = setAttribute "alts" (renderTemplates altsIR) $ setAttribute "tags" (tags::[Int]) $ setAttribute "ninstr" (show ninstr) caseTmpl
         Just altTmpl = getStringTemplate "alt" templates
         altsIR = foldl (translateAlts altTmpl) [] alts'
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushconstr tag arity) =
+    (reg, stack, ir ++ [template'], ninstr + 1)
+    where
+        Just template = getStringTemplate "pushconstr" templates
+        template' = setManyAttrib [("tag", show tag), ("arity", show arity), ("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates state (Error msg) = state
 
 

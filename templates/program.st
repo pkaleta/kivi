@@ -11,7 +11,7 @@ declare i8* @memcpy(i8*, i8*, i64)
 @AP_TAG = global i64 2
 @GLOBAL_TAG = global i64 3
 @IND_TAG = global i64 4
-@CONS_TAG = global i64 5
+@CONSTR_TAG = global i64 5
 
 ; globals
 @vstack = global [1000 x i64] undef
@@ -48,6 +48,15 @@ define i64* @pop() {
     call void(i64*)* @decSp(i64* @sp)
 
     ret i64* %addr
+}
+
+; pops n elements from the top of the stack
+define void @popn(i64 %n) {
+    %vsp = load i64* @sp
+    %vsp1 = sub i64 %vsp, %n
+    store i64 %vsp1, i64* @sp
+
+    ret void
 }
 
 define i64** @getTopPtr() {
@@ -183,6 +192,62 @@ define i64* @hAllocInd(i64* %addr) {
     ret i64* %ptag
 }
 
+define i64** @incPtr(i64** %ptr) {
+    %val = ptrtoint i64** %ptr to i64
+    %incval = add i64 %val, 8
+    %incptr = inttoptr i64 %incval to i64**
+
+    ret i64** %incptr
+}
+
+define i64* @hAllocConstr(i64 %tag, i64** %psrcStart, i64 %nargs) {
+    %size = add i64 16, %nargs
+    %ptr = call i8*(i64)* @malloc(i64 %size)
+    %pconstr = bitcast i8* %ptr to i64*
+    %ptag = call i64*(i64*)* @getConstrTagPtr(i64* %pconstr)
+    %pdestStart = call i64**(i64*)* @getConstrArgsPtr(i64* %pconstr)
+
+    ; store node tag
+    %t = load i64* @CONSTR_TAG
+    store i64 %t, i64* %pconstr
+
+    ; store constructor tag
+    store i64 %tag, i64* %ptag
+
+    ; store arguments
+    %pi = alloca i64
+    store i64 0, i64* %pi
+    %curpsrc = alloca i64**
+    store i64** %psrcStart, i64*** %curpsrc
+    %curpdest = alloca i64**
+    store i64** %pdestStart, i64*** %curpdest
+    br label %LOOP
+LOOP:
+    %i = load i64* %pi
+    %cond = icmp eq i64 %i, %nargs
+    br i1 %cond, label %DONE_LOOP, label %COPY
+COPY:
+    ; copy current argument pointer
+    %psrc = load i64*** %curpsrc
+    %src = load i64** %psrc
+    %pdest = load i64*** %curpdest
+    store i64* %src, i64** %pdest
+    ; increment both pointers
+    %psrc1 = call i64**(i64**)* @incPtr(i64** %psrc)
+    store i64** %psrc1, i64*** %curpsrc
+    %pdest1 = call i64**(i64**)* @incPtr(i64** %pdest)
+    store i64** %pdest1, i64*** %curpdest
+
+    ; increment counter
+    %i1 = add i64 1, %i
+    store i64 %i1, i64* %pi
+    br label %LOOP
+
+DONE_LOOP:
+    ret i64* %pconstr
+}
+
+
 ; *************** Utility functions
 
 define i64 @getTag(i64* %addr) {
@@ -233,6 +298,20 @@ define i64** @getAddrPtr(i64* %addr) {
     ret i64** %paddr
 }
 
+define i64* @getConstrTagPtr(i64* %addr) {
+    %p8tag = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %addr)
+    %ptag = bitcast i8* %p8tag to i64*
+
+    ret i64* %ptag
+}
+
+define i64** @getConstrArgsPtr(i64* %addr) {
+    %p8args = call i8*(i64, i64*)* @nextPtr(i64 2, i64* %addr)
+    %pargs = bitcast i8* %p8args to i64**
+
+    ret i64** %pargs
+}
+
 define i8* @nextPtr(i64 %n, i64* %ptr) {
     %1 = ptrtoint i64* %ptr to i64
     %2 = mul i64 %n, 8
@@ -240,7 +319,6 @@ define i8* @nextPtr(i64 %n, i64* %ptr) {
     %4 = inttoptr i64 %3 to i8*
     ret i8* %4
 }
-
 
 ; *************** G-Machine operations
 
@@ -339,27 +417,39 @@ DONE_UNWIND:
     ret void
 }
 
+$constrFuns$
+
 define i64 @main() {
     store i64 0, i64* @sp
     store i64 0, i64* @vsp
     call void()* @_main()
 
     %ptop = call i64**()* @getTopPtr()
-    %ptag = load i64** %ptop
-    %tag = call i64(i64*)* @getTag(i64* %ptag)
+    %pret = load i64** %ptop
+    %ret = call i64(i64*)* @getTag(i64* %pret)
 
-    switch i64 %tag, label %ERROR [i64 1, label %NUM]
+    switch i64 %ret, label %ERROR [ i64 1, label %NUM
+                                    i64 5, label %CONSTR ]
+
+NUM:
+    %psnum = getelementptr [6 x i8]* @snum, i64 0, i64 0
+    %pnum = call i64*(i64*)* @getNumPtr(i64* %pret)
+    %num = load i64* %pnum
+    call i64 (i8 *, ...)* @printf(i8* %psnum, i64 %num)
+    br label %DONE
+
+CONSTR:
+    %pconstr = call i64*(i64*)* @getConstrTagPtr(i64* %pret)
+    %tag = load i64* %pconstr
+    ret i64 %tag
 
 ERROR:
     %pserr = getelementptr [7 x i8]* @s, i64 0, i64 0
     call i64 (i8 *, ...)* @printf(i8* %pserr)
     %err = add i64 0, 0
-    ret i64 %err
-NUM:
-    %psnum = getelementptr [6 x i8]* @snum, i64 0, i64 0
-    %pnum = call i64*(i64*)* @getNumPtr(i64* %ptag)
-    %num = load i64* %pnum
-    call i64 (i8 *, ...)* @printf(i8* %psnum, i64 %num)
+    br label %DONE
+
+DONE:
     ret i64 0
 }
 
