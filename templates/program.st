@@ -10,6 +10,7 @@ declare i8* @memcpy(i8*, i8*, i64)
 @NUM_TAG = global i64 1
 @AP_TAG = global i64 2
 @GLOBAL_TAG = global i64 3
+@IND_TAG = global i64 4
 
 ; globals
 @vstack = global [1000 x i64] undef
@@ -166,6 +167,21 @@ define i64* @hAllocGlobal(i64 %arity, void()* %funPtr) {
     ret i64* %ptag
 }
 
+define i64* @hAllocInd(i64* %addr) {
+    %ptr = call i8*(i64)* @malloc(i64 16)
+    %ptag = bitcast i8* %ptr to i64*
+    %paddr = call i64**(i64*)* @getAddrPtr(i64* %ptag)
+
+    ;save the tag
+    %indtag = load i64* @IND_TAG
+    store i64 %indtag, i64* %ptag
+
+    ; save address
+    store i64* %addr, i64** %paddr
+
+    ret i64* %ptag
+}
+
 ; *************** Utility functions
 
 define i64 @getTag(i64* %addr) {
@@ -207,6 +223,13 @@ define void()** @getCodePtr(i64* %addr) {
     %pcode = bitcast i8* %p8code to void()**
 
     ret void()** %pcode
+}
+
+define i64** @getAddrPtr(i64* %addr) {
+    %p8addr = call i8*(i64, i64*)* @nextPtr(i64 1, i64* %addr)
+    %paddr = bitcast i8* %p8addr to i64**
+
+    ret i64** %paddr
 }
 
 define i8* @nextPtr(i64 %n, i64* %ptr) {
@@ -273,7 +296,11 @@ define void @GMUpdate(i64 %n) {
     %n1 = add i64 %n, 1
     %rootIndex = sub i64 %vsp, %n1
     %toUpdate = call i64**(i64)* @getItemPtr(i64 %rootIndex)
-    store i64* %top, i64** %toUpdate
+
+    ; create ind node on the heap
+    %ind = call i64*(i64*)* @hAllocInd(i64* %top)
+
+    store i64* %ind, i64** %toUpdate
 
     ret void
 }
@@ -285,10 +312,9 @@ define void @GMEval() {
 
     switch i64 %tag, label %otherwise [ i64 1, label %NUM_EVAL
                                         i64 2, label %AP_EVAL
-                                        i64 3, label %GLOB_EVAL ]
+                                        i64 3, label %GLOB_EVAL
+                                        i64 4, label %IND_EVAL ]
 
-otherwise:
-    br label %DONE_EVAL
 NUM_EVAL:
     br label %DONE_EVAL
 
@@ -297,6 +323,17 @@ AP_EVAL:
     br label %DONE_EVAL
 
 GLOB_EVAL:
+    br label %DONE_EVAL
+
+IND_EVAL:
+    call i64*()* @pop()
+    %paddr = call i64**(i64*)* @getAddrPtr(i64* %top)
+    %addr = load i64** %paddr
+    call void(i64*)* @push(i64* %addr)
+    call void()* @GMUnwind()
+    br label %DONE_EVAL
+
+otherwise:
     br label %DONE_EVAL
 
 DONE_EVAL:
@@ -356,7 +393,8 @@ define void @GMUnwind() {
 
     switch i64 %tag, label %otherwise [ i64 1, label %NUM_UNWIND
                                         i64 2, label %AP_UNWIND
-                                        i64 3, label %GLOB_UNWIND ]
+                                        i64 3, label %GLOB_UNWIND
+                                        i64 4, label %IND_UNWIND ]
 
 NUM_UNWIND:
     br label %DONE_UNWIND
@@ -382,6 +420,14 @@ GLOB_UNWIND:
 
     ; call the function
     call void()* %code()
+    br label %DONE_UNWIND
+
+IND_UNWIND:
+    call i64*()* @pop()
+    %paddr = call i64**(i64*)* @getAddrPtr(i64* %top)
+    %addr = load i64** %paddr
+    call void(i64*)* @push(i64* %addr)
+    call void()* @GMUnwind()
     br label %DONE_UNWIND
 
 otherwise:

@@ -46,7 +46,6 @@ nameMapping = Map.fromList [("+", "add"),
 funPrefix :: String
 funPrefix = "_"
 
-
 numTag :: Int
 numTag = 1
 
@@ -63,6 +62,7 @@ initialReg = 1
 
 initialInstructionNum :: Int
 initialInstructionNum = 1
+
 
 nextReg :: Reg -> Reg
 nextReg reg = reg + 1
