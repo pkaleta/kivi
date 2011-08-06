@@ -140,62 +140,71 @@ translateToLLVMIR :: NameArityCodeMapping
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Update n) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "update" templates
-        template' = setManyAttrib [("n", show n)] template
+        template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Push n) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "push" templates
-        template' = setManyAttrib [("n", show n)] template
+        template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pop n) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "pop" templates
-        template' = setManyAttrib [("n", show n)] template
+        template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
 -- TODO: change this not to allocate numbers on mapping
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushint n) = (nextReg reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "pushint" templates
-        template' = setManyAttrib [("n", show n)] template
+        template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushglobal v) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "pushglobal" templates
         template' = setManyAttrib [("arity", show arity), ("name", mkFunName v), ("ninstr", show ninstr)] template
         Just (arity, code) = trace ("********** " ++ show v)Map.lookup v mapping
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mkap) = (reg, stack, ir ++ [template], ninstr + 1)
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mkap) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "mkap" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Unwind) =  (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Unwind) =  (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "unwind" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Eval) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Eval) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "eval" templates
+        template' = setManyAttrib [("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushbasic n) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "pushbasic" templates
-        template' = setManyAttrib [("n", show n)] template
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Get) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Get) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "get" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Add) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Add) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "add" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Sub) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Sub) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "sub" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mul) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mul) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "mul" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Div) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Div) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "div" templates
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (MkInt) = (reg, stack, ir ++ [template], ninstr + 1)
+        template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (MkInt) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "mkint" templates
+        template' = setManyAttrib [("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (CasejumpSimple alts) = (reg, stack, ir ++ [caseTmpl'], ninstr')
     where
         (ninstr', alts') = mapAccumL (translateAlt mapping templates) ninstr alts
         tags = filter (>= 0) $ map fst alts'
         Just caseTmpl = getStringTemplate "casejumpsimple" templates
-        caseTmpl' = setAttribute "alts" (renderTemplates altsIR) $ setAttribute "tags" (tags::[Int]) caseTmpl
+        caseTmpl' = setAttribute "alts" (renderTemplates altsIR) $ setAttribute "tags" (tags::[Int]) $ setAttribute "ninstr" (show ninstr) caseTmpl
         Just altTmpl = getStringTemplate "alt" templates
         altsIR = foldl (translateAlts altTmpl) [] alts'
 translateToLLVMIR mapping templates state (Error msg) = state
