@@ -243,105 +243,6 @@ define i8* @nextPtr(i64 %n, i64* %ptr) {
 
 ; *************** G-Machine operations
 
-define void @GMPush(i64 %n) {
-    %vsp = load i64* @sp
-    %tmp = add i64 %n, 1
-    %n1 = sub i64 %vsp, %tmp
-    %paddr = getelementptr [1000 x i64*]* @stack, i64 0, i64 %n1
-    %addr = load i64** %paddr
-
-    call void(i64*)* @push(i64* %addr)
-
-    ret void
-}
-
-define void @GMPop(i64 %n) {
-    %vsp = load i64* @sp
-
-    ; update the stack pointer
-    %vsp1 = sub i64 %vsp, %n
-    store i64 %vsp1, i64* @sp
-
-    ret void
-}
-
-define void @GMPushint(i64 %n) {
-    ; create the num node on the heap
-    %ptag = call i64*(i64)* @hAllocNum(i64 %n)
-
-    ; push node address onto the stack
-    call void(i64*)* @push(i64* %ptag)
-
-    ret void
-}
-
-define void @GMMkap() {
-    %fun = call i64*()* @pop()
-    %arg = call i64*()* @pop()
-
-    ; create application node on the heap
-    %ap = call i64*(i64*, i64*)* @hAllocAp(i64* %fun, i64* %arg)
-
-    ; push the newly allocated appliation node address onto the stack
-    call void(i64*)* @push(i64* %ap)
-
-    ret void
-}
-
-define void @GMUpdate(i64 %n) {
-    %top = call i64*()* @pop()
-
-    ; update the nth node on the stack to hold the same value as the top node
-    %vsp = load i64* @sp
-    %n1 = add i64 %n, 1
-    %rootIndex = sub i64 %vsp, %n1
-    %toUpdate = call i64**(i64)* @getItemPtr(i64 %rootIndex)
-
-    ; create ind node on the heap
-    %ind = call i64*(i64*)* @hAllocInd(i64* %top)
-
-    store i64* %ind, i64** %toUpdate
-
-    ret void
-}
-
-define void @GMEval() {
-    %ptop = call i64**()* @getTopPtr()
-    %top = load i64** %ptop
-    %tag = load i64* %top
-
-    switch i64 %tag, label %otherwise [ i64 1, label %NUM_EVAL
-                                        i64 2, label %AP_EVAL
-                                        i64 3, label %GLOB_EVAL
-                                        i64 4, label %IND_EVAL ]
-
-NUM_EVAL:
-    br label %DONE_EVAL
-
-AP_EVAL:
-    call void()* @GMUnwind()
-    br label %DONE_EVAL
-
-GLOB_EVAL:
-    br label %DONE_EVAL
-
-IND_EVAL:
-    call i64*()* @pop()
-    %paddr = call i64**(i64*)* @getAddrPtr(i64* %top)
-    %addr = load i64** %paddr
-    call void(i64*)* @push(i64* %addr)
-    call void()* @GMUnwind()
-    br label %DONE_EVAL
-
-otherwise:
-    br label %DONE_EVAL
-
-DONE_EVAL:
-
-    ret void
-}
-
-
 define void @rearrange(i64 %arity) {
     %vsp = load i64* @sp
     %vsp1 = sub i64 %vsp, 1
@@ -386,7 +287,7 @@ END:
 }
 
 
-define void @GMUnwind() {
+define void @unwind() {
     %ptop = call i64**()* @getTopPtr()
     %top = load i64** %ptop
     %tag = load i64* %top
@@ -403,7 +304,7 @@ AP_UNWIND:
     %pfun = call i64**(i64*)* @getFunPtr(i64* %top)
     %fun = load i64** %pfun
     call void(i64*)* @push(i64* %fun)
-    call void()* @GMUnwind()
+    call void()* @unwind()
     br label %DONE_UNWIND
 
 GLOB_UNWIND:
@@ -427,89 +328,13 @@ IND_UNWIND:
     %paddr = call i64**(i64*)* @getAddrPtr(i64* %top)
     %addr = load i64** %paddr
     call void(i64*)* @push(i64* %addr)
-    call void()* @GMUnwind()
+    call void()* @unwind()
     br label %DONE_UNWIND
 
 otherwise:
     br label %DONE_UNWIND
 
 DONE_UNWIND:
-    ret void
-}
-
-define void @GMPushbasic(i64 %n) {
-    call void(i64)* @pushV(i64 %n)
-
-    ret void
-}
-
-define void @GMGet() {
-    %top = call i64*()* @pop()
-    %tag = call i64(i64*)* @getTag(i64* %top)
-
-    switch i64 %tag, label %NOT_FOUND [ i64 1, label %NUM ]
-
-NUM:
-    %pnum = call i64*(i64*)* @getNumPtr(i64* %top)
-    %num = load i64* %pnum
-
-    call void(i64)* @pushV(i64 %num)
-    br label %DONE
-
-NOT_FOUND:
-    %ps = getelementptr [63 x i8]* @getErrStr, i64 0, i64 0
-    call i64 (i8 *, ...)* @printf(i8* %ps)
-    br label %DONE
-
-DONE:
-    ret void
-}
-
-define void @GMAdd() {
-    %a = call i64()* @popV()
-    %b = call i64()* @popV()
-    %res = add i64 %a, %b
-    call void(i64)* @pushV(i64 %res)
-
-    ret void
-}
-
-define void @GMSub() {
-    %a = call i64()* @popV()
-    %b = call i64()* @popV()
-    %res = sub i64 %a, %b
-    call void(i64)* @pushV(i64 %res)
-
-    ret void
-}
-
-define void @GMMul() {
-    %a = call i64()* @popV()
-    %b = call i64()* @popV()
-    %res = mul i64 %a, %b
-    call void(i64)* @pushV(i64 %res)
-
-    ret void
-}
-
-define void @GMDiv() {
-    %a = call i64()* @popV()
-    %b = call i64()* @popV()
-    %res = udiv i64 %a, %b
-    call void(i64)* @pushV(i64 %res)
-
-    ret void
-}
-
-define void @GMMkInt() {
-    %n = call i64()* @popV()
-
-    ; alloc num node on the heap
-    %num = call i64*(i64)* @hAllocNum(i64 %n)
-
-    ; push address onto the stack
-    call void(i64*)* @push(i64* %num)
-
     ret void
 }
 

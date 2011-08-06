@@ -1,2 +1,3 @@
-call void(i64)* @GMPushbasic(i64 $n$)
+; *************** Pushbasic $n$ ***************
+call void(i64)* @pushV(i64 $n$)
 
