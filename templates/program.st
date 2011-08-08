@@ -201,7 +201,8 @@ define i64** @incPtr(i64** %ptr) {
 }
 
 define i64* @hAllocConstr(i64 %tag, i64** %psrcStart, i64 %nargs) {
-    %size = add i64 16, %nargs
+    %argsSize = mul i64 %nargs, 8
+    %size = add i64 16, %argsSize
     %ptr = call i8*(i64)* @malloc(i64 %size)
     %pconstr = bitcast i8* %ptr to i64*
     %ptag = call i64*(i64*)* @getConstrTagPtr(i64* %pconstr)
@@ -374,7 +375,8 @@ define void @unwind() {
     switch i64 %tag, label %otherwise [ i64 1, label %NUM_UNWIND
                                         i64 2, label %AP_UNWIND
                                         i64 3, label %GLOB_UNWIND
-                                        i64 4, label %IND_UNWIND ]
+                                        i64 4, label %IND_UNWIND
+                                        i64 5, label %CONSTR_UNWIND ]
 
 NUM_UNWIND:
     br label %DONE_UNWIND
@@ -408,6 +410,9 @@ IND_UNWIND:
     %addr = load i64** %paddr
     call void(i64*)* @push(i64* %addr)
     call void()* @unwind()
+    br label %DONE_UNWIND
+
+CONSTR_UNWIND:
     br label %DONE_UNWIND
 
 otherwise:
