@@ -214,26 +214,64 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (MkInt) = (reg, sta
     where
         Just template = getStringTemplate "mkint" templates
         template' = setManyAttrib [("ninstr", show ninstr)] template
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (CasejumpSimple alts) = (reg, stack, ir ++ [caseTmpl'], ninstr')
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (CasejumpSimple alts) =
+    (reg, stack, ir ++ [caseTmpl], ninstr')
     where
-        (ninstr', alts') = mapAccumL (translateAlt mapping templates) ninstr alts
-        tags = filter (>= 0) $ map fst alts'
-        Just caseTmpl = getStringTemplate "casejumpsimple" templates
-        caseTmpl' = setAttribute "alts" (renderTemplates altsIR) $ setAttribute "tags" (tags::[Int]) $ setAttribute "ninstr" (show ninstr) caseTmpl
-        Just altTmpl = getStringTemplate "alt" templates
-        altsIR = foldl (translateAlts altTmpl) [] alts'
+        (caseTmpl, ninstr') = translateCase mapping templates alts tagChooser ninstr "casejumpsimple"
+        tagChooser = filter (>= 0) . (map fst)
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (CasejumpConstr alts) =
+    (reg, stack, ir ++ [caseTmpl], ninstr')
+    where
+        (caseTmpl, ninstr') = translateCase mapping templates alts tagChooser ninstr "casejumpconstr"
+        tagChooser = map fst
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushconstr tag arity) =
     (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "pushconstr" templates
         template' = setManyAttrib [("tag", show tag), ("arity", show arity), ("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Alloc n) =
+    (reg, stack, ir ++ [template'], ninstr + 1)
+    where
+        Just template = getStringTemplate "alloc" templates
+        template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Select n k) =
+    (reg, stack, ir ++ [template'], ninstr + 1)
+    where
+        Just template = getStringTemplate "select" templates
+        template' = setManyAttrib [("n", show n), ("k", show k), ("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates state (Error msg) = state
 
 
-translateAlts :: StringTemplate String -> [LLVMIR] -> (Int, [LLVMIR]) -> [LLVMIR]
-translateAlts altTmpl irAcc (tag, ir) = irAcc ++ [altTmpl']
+translateCase :: NameArityCodeMapping
+              -> STGroup String
+              -> [(Int, GmCode)]
+              -> ([(Int, [LLVMIR])] -> [Int])
+              -> NInstr
+              -> String
+              -> (LLVMIR, NInstr)
+translateCase mapping templates alts tagChooser ninstr tmplName = (caseTmpl', ninstr')
     where
-        altTmpl' = setAttribute "tag" (show tag) $ setAttribute "code" (renderTemplates ir) $ altTmpl
+        (ninstr', alts') = mapAccumL (translateAlt mapping templates) ninstr alts
+        Just caseTmpl = getStringTemplate tmplName templates
+        caseTmpl' = setManyAttrib [("alts", renderTemplates altsIR), ("branches", renderTemplates branches)]
+            $ setAttribute "tags" (tags::[Int])
+            $ setAttribute "ninstr" (show ninstr') caseTmpl
+        branches = foldl (translateBranch ninstr' branchTmpl) [] tags
+        Just branchTmpl = getStringTemplate "branch" templates
+        altsIR = foldl (translateAlts ninstr' altTmpl) [] alts'
+        Just altTmpl = getStringTemplate "alt" templates
+        tags = tagChooser alts'
+
+
+translateBranch :: NInstr -> StringTemplate String -> [LLVMIR] -> Int -> [LLVMIR]
+translateBranch ninstr branchTmpl irAcc tag = irAcc ++ [branchTmpl']
+    where branchTmpl' = setManyAttrib [("ninstr", show ninstr), ("tag", show tag)] branchTmpl
+
+translateAlts :: NInstr -> StringTemplate String -> [LLVMIR] -> (Int, [LLVMIR]) -> [LLVMIR]
+translateAlts ninstr altTmpl irAcc (tag, ir) = irAcc ++ [altTmpl']
+    where
+        altTmpl' = setManyAttrib [("ninstr", show ninstr), ("tag", show tag)]
+            $ setAttribute "code" (renderTemplates ir) altTmpl
 
 
 translateAlt :: NameArityCodeMapping

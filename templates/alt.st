@@ -1,4 +1,4 @@
-ALT$tag$:
+ALT$tag$.$ninstr$:
     $code$
-    br label %END_CASE
+    br label %END_CASE.$ninstr$
 

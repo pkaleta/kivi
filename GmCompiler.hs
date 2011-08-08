@@ -36,7 +36,7 @@ selFunName r i = "select-" ++ show r ++ "-" ++ show i
 
 
 precompiledScs :: [GmCompiledSc]
-precompiledScs = []--foldl genSelFuns [] [0..5]
+precompiledScs = foldl genSelFuns [] [0..5]
 
 
 genSelFuns :: [GmCompiledSc] -> Int -> [GmCompiledSc]
