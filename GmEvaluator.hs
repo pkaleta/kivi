@@ -346,10 +346,10 @@ print2 state =
         (NConstr t as) -> putOutput output' $ putCode code' $ putStack stack' state
             where
                 code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)
-                stack' = as ++ (getStack state)
+                stack' = as ++ stack
                 output' = output ++ "(NConstr " ++ show t ++ " ["
     where
-        (a : as) = getStack state
+        stack@(a : as) = getStack state
         output = getOutput state
 
 pushbasic :: Int -> GmState -> GmState
