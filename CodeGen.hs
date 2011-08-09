@@ -36,6 +36,7 @@ nameMapping = Map.fromList [("+", "add"),
                             ("-", "sub"),
                             ("*", "mul"),
                             ("/", "div"),
+                            ("%", "mod"),
                             ("negate", "negate"),
                             ("==", "eq"),
                             ("!=", "ne"),
@@ -54,7 +55,8 @@ relationalMapping = Map.fromList [("eq", "eq"),
                                   ("add", "add"),
                                   ("sub", "sub"),
                                   ("mul", "mul"),
-                                  ("div", "udiv")]
+                                  ("div", "udiv"),
+                                  ("mod", "urem")]
 
 
 funPrefix :: String
@@ -248,6 +250,8 @@ translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Sub) =
 translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Mul) =
     translateBinOp (mkArithTmpl templates instr) state
 translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Div) =
+    translateBinOp (mkArithTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Mod) =
     translateBinOp (mkArithTmpl templates instr) state
 
 translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Eq) =

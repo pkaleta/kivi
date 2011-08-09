@@ -456,8 +456,8 @@ relational2 :: (Int -> Int -> Bool) -> (GmState -> GmState)
 relational2 op = binOp fun
     where
         fun x y = case (op x y) of
-            True -> 0
-            False -> 1
+            True -> trueTag
+            False -> falseTag
 
 binOp :: (Int -> Int -> Int) -> GmState -> GmState
 binOp op state = putVStack vstack' state
