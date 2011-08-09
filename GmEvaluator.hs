@@ -1,10 +1,8 @@
 module GmEvaluator where
 
---import Lexer
 import Parser
 import Utils
 import List
---import Core
 import Common
 import Debug.Trace
 import GmCompiler
@@ -17,7 +15,6 @@ import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
---import Gc
 
 
 --runTest :: String -> CoreProgram
@@ -83,6 +80,7 @@ step state =
 dispatch :: Instruction -> GmState -> GmState
 dispatch Unwind              = unwind
 dispatch (Pushglobal f)      = pushglobal f
+dispatch (Pushconstr t a)    = pushconstr t a
 dispatch (Pushint n)         = pushint n
 dispatch (Push n)            = push n
 dispatch Mkap                = mkap
@@ -95,6 +93,7 @@ dispatch Add                 = add
 dispatch Sub                 = sub
 dispatch Mul                 = mul
 dispatch Div                 = div2
+dispatch Mod                 = mod2
 dispatch Neg                 = neg
 dispatch Eq                  = eq
 dispatch Ne                  = ne
@@ -102,10 +101,9 @@ dispatch Lt                  = lt
 dispatch Le                  = le
 dispatch Gt                  = gt
 dispatch Ge                  = ge
-dispatch (Cond ist isf)      = cond ist isf
 dispatch (Pack t n)          = pack t n
-dispatch (CasejumpSimple bs) = casejumpSimple bs
-dispatch (CasejumpConstr bs) = casejumpConstr bs
+dispatch (CasejumpSimple bs) = casejump bs
+dispatch (CasejumpConstr bs) = casejump bs
 dispatch (Split n)           = split2 n
 dispatch (Print)             = print2
 dispatch (Pushbasic n)       = pushbasic n
@@ -149,35 +147,34 @@ unwindDump state =
         (code, stack, vstack) : ds = getDump state
         addr = head $ getStack state
 
+
 pushglobal :: Name -> GmState -> GmState
 pushglobal name state =
-    case take 4 name == "Pack" of
-        True -> pushglobalPack name state
-        False -> pushglobalNormal name state
+    putStack stack' state
+    where
+        addr = aLookup (getGlobals state) name $ error $ "Undeclared global identifier: " ++ name
+        stack' = addr : getStack state
 
-pushglobalPack :: Name -> GmState -> GmState
-pushglobalPack name state =
+
+pushconstr :: Int -> Int -> GmState -> GmState
+pushconstr tag arity state =
     case aHasKey globals name of
         True ->
             putStack (addr : stack) state
             where
                 addr = aLookup globals name $ error "This is not possible"
         False ->
-            putStack (addr : stack) $ putHeap heap' state
+            putStack stack' $ putHeap heap' $ putGlobals globals' $ state
             where
-                (heap', addr) = hAlloc heap $ NGlobal n [Pack t n, Update 0, Unwind]
-                [t, n] = map read $ Data.List.Utils.split "," (name =~ "[0-9]+,[0-9]+" :: String)
+                globals' = (name, addr) : globals
+                stack' = addr : stack
+                (heap', addr) = hAlloc heap $ NGlobal arity [Pack tag arity, Update 0, Unwind]
     where
+        name = "Pack{" ++ show tag ++ "," ++ show arity ++ "}"
         globals = getGlobals state
         stack = getStack state
         heap = getHeap state
 
-pushglobalNormal :: Name -> GmState -> GmState
-pushglobalNormal name state =
-    putStack stack' state
-    where
-        addr = aLookup (getGlobals state) name $ error $ "Undeclared global identifier: " ++ name
-        stack' = addr : getStack state
 
 pushint :: Int -> GmState -> GmState
 pushint n state =
@@ -276,6 +273,9 @@ mul = arithmetic2 (*)
 div2 :: GmState -> GmState
 div2 = arithmetic2 (div)
 
+mod2 :: GmState -> GmState
+mod2 = arithmetic2 (rem)
+
 neg :: GmState -> GmState
 neg = unaryOp negate
 
@@ -297,15 +297,6 @@ gt = relational2 (>)
 ge :: GmState -> GmState
 ge = relational2 (>=)
 
-cond :: GmCode -> GmCode -> GmState -> GmState
-cond ist isf state =
-    putCode code' $ putVStack vs state
-    where
-        (v : vs) = getVStack state
-        code' = case v of
-            0 -> ist ++ code
-            1 -> isf ++ code
-        code = getCode state
 
 pack :: Int -> Int -> GmState -> GmState
 pack t n state =
@@ -314,14 +305,6 @@ pack t n state =
         stack' = addr : (drop n stack)
         (heap', addr) = hAlloc (getHeap state) (NConstr t $ take n stack)
         stack = getStack state
-
-
-casejumpSimple :: Assoc Int GmCode -> GmState -> GmState
-casejumpSimple = casejump
-
-
-casejumpConstr :: Assoc Int GmCode -> GmState -> GmState
-casejumpConstr = casejump
 
 
 casejump :: Assoc Int GmCode -> GmState -> GmState
@@ -367,10 +350,10 @@ print2 state =
         (NConstr t as) -> putOutput output' $ putCode code' $ putStack stack' state
             where
                 code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)
-                stack' = as ++ (getStack state)
+                stack' = as ++ stack
                 output' = output ++ "(NConstr " ++ show t ++ " ["
     where
-        (a : as) = getStack state
+        stack@(a : as) = getStack state
         output = getOutput state
 
 pushbasic :: Int -> GmState -> GmState
@@ -473,8 +456,8 @@ relational2 :: (Int -> Int -> Bool) -> (GmState -> GmState)
 relational2 op = binOp fun
     where
         fun x y = case (op x y) of
-            True -> 0
-            False -> 1
+            True -> trueTag
+            False -> falseTag
 
 binOp :: (Int -> Int -> Int) -> GmState -> GmState
 binOp op state = putVStack vstack' state

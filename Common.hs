@@ -71,6 +71,7 @@ type GmCode = [Instruction]
 
 data Instruction = Unwind
                  | Pushglobal Name
+                 | Pushconstr Int Int
                  | Pushint Int
                  | Push Int
                  | Mkap
@@ -79,9 +80,8 @@ data Instruction = Unwind
                  | Slide Int
                  | Alloc Int
                  | Eval
-                 | Add | Sub | Mul | Div | Neg
+                 | Add | Sub | Mul | Div | Neg | Mod
                  | Eq | Ne | Lt | Le | Gt | Ge
-                 | Cond GmCode GmCode
                  | Pack Int Int
                  | CasejumpSimple (Assoc Int GmCode)
                  | CasejumpConstr (Assoc Int GmCode)
@@ -215,6 +215,7 @@ showExpr' indent (ELam args expr) =
         argsStr = join "," [show v | v <- args]
 showExpr' indent (ECaseSimple expr alts) = showExprCase indent "Simple" expr alts
 showExpr' indent (ECaseConstr expr alts) = showExprCase indent "Constr" expr alts
+showExpr' indent (ECase expr alts) = showCase indent expr alts
 showExpr' indent (EError msg) = "Error " ++ msg
 showExpr' indent (ESelect r i v) = "Select " ++ show r ++ " " ++ show i ++ " " ++ show v
 
@@ -223,7 +224,14 @@ showExprCase :: Show a => Int -> String -> Expr a -> [Alter Int a] -> String
 showExprCase indent t expr alts =
     "Case" ++ t ++ " " ++ showExpr' indent expr ++ " of" ++ altsStr
     where
-        altsStr = foldl (++) "" ["\n" ++ getIndent (indent+1) ++ show n ++ " = " ++ showExpr' (indent+1) expr | (n, expr) <- alts]
+        altsStr = concat ["\n" ++ getIndent (indent+1) ++ show n ++ " = " ++ showExpr' (indent+1) expr | (n, expr) <- alts]
+
+
+showCase :: Show a => Int -> Expr a -> [Alter Pattern a] -> String
+showCase indent expr alts =
+    "Case " ++ showExpr' indent expr ++ " of" ++ altsStr
+    where
+        altsStr = concat ["\n" ++ getIndent (indent+1) ++ show pat ++ " = " ++ showExpr' (indent+1) expr | (pat, expr) <- alts]
 
 
 defaultIndent :: String
