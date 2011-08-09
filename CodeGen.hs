@@ -50,7 +50,11 @@ relationalMapping = Map.fromList [("eq", "eq"),
                                   ("lt", "ult"),
                                   ("le", "ule"),
                                   ("gt", "ugt"),
-                                  ("ge", "uge")]
+                                  ("ge", "uge"),
+                                  ("add", "add"),
+                                  ("sub", "sub"),
+                                  ("mul", "mul"),
+                                  ("div", "udiv")]
 
 
 funPrefix :: String
@@ -204,22 +208,6 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Get) = (reg, stack
     where
         Just template = getStringTemplate "get" templates
         template' = setManyAttrib [("ninstr", show ninstr)] template
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Add) = (reg, stack, ir ++ [template'], ninstr + 1)
-    where
-        Just template = getStringTemplate "add" templates
-        template' = setManyAttrib [("ninstr", show ninstr)] template
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Sub) = (reg, stack, ir ++ [template'], ninstr + 1)
-    where
-        Just template = getStringTemplate "sub" templates
-        template' = setManyAttrib [("ninstr", show ninstr)] template
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mul) = (reg, stack, ir ++ [template'], ninstr + 1)
-    where
-        Just template = getStringTemplate "mul" templates
-        template' = setManyAttrib [("ninstr", show ninstr)] template
-translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Div) = (reg, stack, ir ++ [template'], ninstr + 1)
-    where
-        Just template = getStringTemplate "div" templates
-        template' = setManyAttrib [("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (MkInt) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "mkint" templates
@@ -253,21 +241,37 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Select n k) =
     where
         Just template = getStringTemplate "select" templates
         template' = setManyAttrib [("n", show n), ("k", show k), ("ninstr", show ninstr)] template
-translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Eq) = translateRelational templates state instr
-translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Ne) = translateRelational templates state instr
-translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Lt) = translateRelational templates state instr
-translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Le) = translateRelational templates state instr
-translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Gt) = translateRelational templates state instr
-translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Ge) = translateRelational templates state instr
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Add) =
+    translateBinOp (mkArithTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Sub) =
+    translateBinOp (mkArithTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Mul) =
+    translateBinOp (mkArithTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Div) =
+    translateBinOp (mkArithTmpl templates instr) state
+
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Eq) =
+    translateBinOp (mkRelationalTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Ne) =
+    translateBinOp (mkRelationalTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Lt) =
+    translateBinOp (mkRelationalTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Le) =
+    translateBinOp (mkRelationalTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Gt) =
+    translateBinOp (mkRelationalTmpl templates instr) state
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Ge) =
+    translateBinOp (mkRelationalTmpl templates instr) state
 translateToLLVMIR mapping templates state (Error msg) = state
 
 
-translateRelational :: STGroup String -> (Reg, LLVMStack, [LLVMIR], NInstr) -> Instruction -> (Reg, LLVMStack, [LLVMIR], NInstr)
-translateRelational templates (reg, stack, ir, ninstr) instr =
-    (reg, stack, ir ++ [relationalTmpl templates ninstr instr], ninstr + 1)
+translateBinOp :: (NInstr -> LLVMIR) -> (Reg, LLVMStack, [LLVMIR], NInstr) -> (Reg, LLVMStack, [LLVMIR], NInstr)
+translateBinOp mkTmpl (reg, stack, ir, ninstr) =
+    (reg, stack, ir ++ [mkTmpl ninstr], ninstr + 1)
 
-relationalTmpl :: STGroup String -> NInstr -> Instruction -> LLVMIR
-relationalTmpl templates ninstr instr = template'
+
+mkRelationalTmpl :: STGroup String -> Instruction -> NInstr -> LLVMIR
+mkRelationalTmpl templates instr ninstr = template'
     where
         template' = setManyAttrib [("trueTag", show trueTag),
             ("falseTag", show falseTag),
@@ -275,6 +279,14 @@ relationalTmpl templates ninstr instr = template'
             ("instr", llvmName)] template
         Just llvmName = Map.lookup (map toLower . show $ instr) relationalMapping
         Just template = getStringTemplate "relational" templates
+
+
+mkArithTmpl :: STGroup String -> Instruction -> NInstr -> LLVMIR
+mkArithTmpl templates instr ninstr = template'
+    where
+        template' = setManyAttrib [ ("ninstr", show ninstr), ("instr", llvmName)] template
+        Just llvmName = Map.lookup (map toLower . show $ instr) relationalMapping
+        Just template = getStringTemplate "arith" templates
 
 
 translateCase :: NameArityCodeMapping
