@@ -15,19 +15,24 @@ type GmCompiler = CoreExpr -> GmEnvironment -> GmCode
 type GmEnvironment = Assoc Name Int
 
 
+binaryOperators :: [String]
+binaryOperators = ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
+
+
+unaryOperators :: [String]
+unaryOperators = ["negate"]
+
+
 primitiveScs :: [CoreScDefn]
---primitiveScs = []
-primitiveScs = [(ScDefn "+" ["x", "y"] (EAp (EAp (EVar "+") (EVar "x")) (EVar "y"))),
-                (ScDefn "-" ["x", "y"] (EAp (EAp (EVar "-") (EVar "x")) (EVar "y"))),
-                (ScDefn "*" ["x", "y"] (EAp (EAp (EVar "*") (EVar "x")) (EVar "y"))),
-                (ScDefn "/" ["x", "y"] (EAp (EAp (EVar "/") (EVar "x")) (EVar "y"))),
-                (ScDefn "negate" ["x"] (EAp (EVar "negate") (EVar "x"))),
-                (ScDefn "==" ["x", "y"] (EAp (EAp (EVar "==") (EVar "x")) (EVar "y"))),
-                (ScDefn "!=" ["x", "y"] (EAp (EAp (EVar "!=") (EVar "x")) (EVar "y"))),
-                (ScDefn "<" ["x", "y"] (EAp (EAp (EVar "<") (EVar "x")) (EVar "y"))),
-                (ScDefn "<=" ["x", "y"] (EAp (EAp (EVar "<=") (EVar "x")) (EVar "y"))),
-                (ScDefn ">" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y"))),
-                (ScDefn ">=" ["x", "y"] (EAp (EAp (EVar ">=") (EVar "x")) (EVar "y")))]
+primitiveScs = map createBinaryOp binaryOperators ++ map createUnaryOp unaryOperators
+
+
+createBinaryOp :: String -> CoreScDefn
+createBinaryOp name = ScDefn name ["x", "y"] (EAp (EAp (EVar name) (EVar "x")) (EVar "y"))
+
+
+createUnaryOp :: String -> CoreScDefn
+createUnaryOp name = ScDefn name ["x"] (EAp (EVar name) (EVar "x"))
 
 
 selFunName :: Int -> Int -> String
@@ -59,7 +64,8 @@ builtinDyadicInt :: Assoc Name Instruction
 builtinDyadicInt = [("+", Add),
                     ("-", Sub),
                     ("*", Mul),
-                    ("/", Div)]
+                    ("/", Div),
+                    ("%", Mod)]
 
 
 builtinDyadic :: Assoc Name Instruction

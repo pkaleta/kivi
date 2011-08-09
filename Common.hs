@@ -80,7 +80,7 @@ data Instruction = Unwind
                  | Slide Int
                  | Alloc Int
                  | Eval
-                 | Add | Sub | Mul | Div | Neg
+                 | Add | Sub | Mul | Div | Neg | Mod
                  | Eq | Ne | Lt | Le | Gt | Ge
                  | Pack Int Int
                  | CasejumpSimple (Assoc Int GmCode)

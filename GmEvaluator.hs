@@ -93,6 +93,7 @@ dispatch Add                 = add
 dispatch Sub                 = sub
 dispatch Mul                 = mul
 dispatch Div                 = div2
+dispatch Mod                 = mod2
 dispatch Neg                 = neg
 dispatch Eq                  = eq
 dispatch Ne                  = ne
@@ -271,6 +272,9 @@ mul = arithmetic2 (*)
 
 div2 :: GmState -> GmState
 div2 = arithmetic2 (div)
+
+mod2 :: GmState -> GmState
+mod2 = arithmetic2 (rem)
 
 neg :: GmState -> GmState
 neg = unaryOp negate

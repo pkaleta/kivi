@@ -287,7 +287,8 @@ pMultExpr = pThen assembleOp pApExpr pMultExprC
 
 pMultExprC :: Parser PartialExpr
 pMultExprC = (pThen FoundOp (pLit "*") pMultExpr) `pOr`
-    (pThen FoundOp (pLit "/") pApExpr) `pOr`
+    (pThen FoundOp (pLit "/") pMultExpr) `pOr`
+    (pThen FoundOp (pLit "%" ) pMultExpr) `pOr`
     (pEmpty NoOp)
 
 
