@@ -15,6 +15,7 @@ import LambdaCalculusTransformer
 import TypeChecker
 import Data.Map as Map hiding (map, filter)
 import Data.List
+import Data.Char
 --import Data.String.Lazy (String)
 import Text.StringTemplate
 
@@ -30,6 +31,7 @@ data LLVMValue = LLVMNum Int
     deriving Show
 
 
+nameMapping :: Map String String
 nameMapping = Map.fromList [("+", "add"),
                             ("-", "sub"),
                             ("*", "mul"),
@@ -37,10 +39,18 @@ nameMapping = Map.fromList [("+", "add"),
                             ("negate", "negate"),
                             ("==", "eq"),
                             ("!=", "ne"),
-                            ("<", "l"),
+                            ("<", "lt"),
                             ("<=", "le"),
-                            (">", "g"),
+                            (">", "gt"),
                             (">=", "ge")]
+
+relationalMapping :: Map String String
+relationalMapping = Map.fromList [("eq", "eq"),
+                                  ("ne", "ne"),
+                                  ("lt", "ult"),
+                                  ("le", "ule"),
+                                  ("gt", "ugt"),
+                                  ("ge", "uge")]
 
 
 funPrefix :: String
@@ -173,7 +183,7 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushglobal v) = (r
     where
         Just template = getStringTemplate "pushglobal" templates
         template' = setManyAttrib [("arity", show arity), ("name", mkFunName v), ("ninstr", show ninstr)] template
-        Just (arity, code) = trace ("********** " ++ show v)Map.lookup v mapping
+        Just (arity, code) = trace ("********** " ++ show v ++ ", " ++ show (Map.lookup v mapping)) Map.lookup v mapping
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mkap) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "mkap" templates
@@ -214,6 +224,10 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (MkInt) = (reg, sta
     where
         Just template = getStringTemplate "mkint" templates
         template' = setManyAttrib [("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (MkBool) = (reg, stack, ir ++ [template'], ninstr + 1)
+    where
+        Just template = getStringTemplate "mkbool" templates
+        template' = setManyAttrib [("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (CasejumpSimple alts) =
     (reg, stack, ir ++ [caseTmpl], ninstr')
     where
@@ -239,7 +253,28 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Select n k) =
     where
         Just template = getStringTemplate "select" templates
         template' = setManyAttrib [("n", show n), ("k", show k), ("ninstr", show ninstr)] template
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Eq) = translateRelational templates state instr
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Ne) = translateRelational templates state instr
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Lt) = translateRelational templates state instr
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Le) = translateRelational templates state instr
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Gt) = translateRelational templates state instr
+translateToLLVMIR mapping templates state@(reg, stack, ir, ninstr) instr@(Ge) = translateRelational templates state instr
 translateToLLVMIR mapping templates state (Error msg) = state
+
+
+translateRelational :: STGroup String -> (Reg, LLVMStack, [LLVMIR], NInstr) -> Instruction -> (Reg, LLVMStack, [LLVMIR], NInstr)
+translateRelational templates (reg, stack, ir, ninstr) instr =
+    (reg, stack, ir ++ [relationalTmpl templates ninstr instr], ninstr + 1)
+
+relationalTmpl :: STGroup String -> NInstr -> Instruction -> LLVMIR
+relationalTmpl templates ninstr instr = template'
+    where
+        template' = setManyAttrib [("trueTag", show trueTag),
+            ("falseTag", show falseTag),
+            ("ninstr", show ninstr),
+            ("instr", llvmName)] template
+        Just llvmName = Map.lookup (map toLower . show $ instr) relationalMapping
+        Just template = getStringTemplate "relational" templates
 
 
 translateCase :: NameArityCodeMapping
