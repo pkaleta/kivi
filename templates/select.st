@@ -1,6 +1,5 @@
 ; *************** Select $n$ $k$ ***************
-%ptop.$ninstr$ = call i64**()* @getTopPtr()
-%pconstr.$ninstr$ = load i64** %ptop.$ninstr$
+%pconstr.$ninstr$ = call i64*()* @pop()
 
 ; we assume that element on the top of the stack is a constructor
 %pargs.$ninstr$ = call i64**(i64*)* @getConstrArgsPtr(i64* %pconstr.$ninstr$)

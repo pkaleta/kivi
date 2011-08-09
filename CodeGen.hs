@@ -249,7 +249,7 @@ translateCase :: NameArityCodeMapping
               -> NInstr
               -> String
               -> (LLVMIR, NInstr)
-translateCase mapping templates alts tagChooser ninstr tmplName = (caseTmpl', ninstr')
+translateCase mapping templates alts tagChooser ninstr tmplName = (caseTmpl', ninstr' + 1)
     where
         (ninstr', alts') = mapAccumL (translateAlt mapping templates) ninstr alts
         Just caseTmpl = getStringTemplate tmplName templates
