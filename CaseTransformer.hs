@@ -62,7 +62,7 @@ transformCaseSimple ns dts expr@(EVar name) alts = ECaseSimple expr alts'
                     (PNum n)   -> (False, acc ++ [(n, expr)])
                     _          -> (True, acc ++ [(defaultTag, expr)])
 
-        defExpr = error $ "No matching pattern found"
+        defExpr = EError "No matching pattern found"
 
 
 transformCaseConstr :: NameSupply -> [DataType] -> Expr Pattern -> [Alter Pattern Pattern] -> Expr Pattern

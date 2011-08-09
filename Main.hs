@@ -5,6 +5,7 @@ import GmEvaluator
 import CodeGen
 import System (getArgs)
 import System.Console.GetOpt
+import Debug.Trace
 
 
 data Flag = Eval
@@ -16,8 +17,6 @@ main = do
     let (flags, nonOpts, msgs) = getOpt RequireOrder options args
     let [fileName] = nonOpts
     content <- readFile fileName
-    putStrLn . show $ flags
-    putStrLn . show $ nonOpts
     case length msgs > 0 of
         True ->
             putStrLn . concat $ msgs
