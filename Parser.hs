@@ -230,9 +230,12 @@ pDefns = pOneOrMoreWithSep pDefn (pLit ";")
 
 
 pDefn :: Parser (Defn Pattern)
-pDefn = pThen3 mkDefn pPatternExpr (pLit "=") pExpr
+pDefn =
+    pThen3 mkVarDefn pPatternExpr (pLit "=") pExpr `pOr`
+    pThen3 mkFunDefn (pOneOrMore pPatternExpr) (pLit "=") pExpr
     where
-        mkDefn patExpr _ expr = (patExpr, expr)
+        mkVarDefn patExpr _ expr = (patExpr, expr)
+        mkFunDefn (name : args) _ expr = (name, ELam args expr)
 
 
 pAlts :: Parser [Alter Pattern Pattern]
