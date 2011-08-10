@@ -95,10 +95,10 @@ matchExpr ns dts (EAp e1 e2) def = (ns2, EAp e1' e2')
     where
         (ns1, e1') = matchExpr ns dts e1 def
         (ns2, e2') = matchExpr ns1 dts e2 def
-matchExpr ns dts (ELam pattern expr) def = (ns2, ELam [(PVar name)] expr')
+matchExpr ns dts (ELam patterns expr) def = (ns2, ELam (Prelude.map PVar names) expr')
     where
-        (ns1, name) = getName ns "_u"
-        (ns2, expr') = matchEquations ns1 dts 1 [name] [(pattern, expr)] def
+        (ns1, names) = getNames ns . replicate (length patterns) $ "_u"
+        (ns2, expr') = matchEquations ns1 dts 1 names [(patterns, expr)] def
 matchExpr ns dts (ELet isRec defns expr) def = (ns2, ELet isRec defns' expr')
     where
         (ns1, expr') = matchExpr ns dts expr def
