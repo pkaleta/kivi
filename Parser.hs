@@ -18,7 +18,7 @@ isAtomicExpr _ = False
 
 -- line number and token
 
-keywords = ["data", "let", "letrec", "case", "in", "of", "Pack"]
+keywords = ["where", "data", "let", "letrec", "case", "in", "of", "Pack"]
 
 --parser implementation
 parse :: String -> PatProgram
@@ -183,9 +183,20 @@ pDataType = pThen4 mkDataType (pLit "data") pDataTypeName (pLit "=") $ pOneOrMor
 
 
 pSc :: Parser PatScDefn
-pSc = pThen4 mkSc pVar pPattern (pLit "=") pExpr
-    where
-        mkSc name pattern equals expr = PatScDefn name [(pattern, expr)]
+pSc = pScSimple `pOr` pScWhere
+
+
+pScSimple :: Parser PatScDefn
+pScSimple = pThen4 mkSc pVar pPattern (pLit "=") pExpr
+    where mkSc name pattern equals expr = PatScDefn name [(pattern, expr)]
+
+
+pScWhere :: Parser PatScDefn
+pScWhere = pThen3 mkScWhere pScSimple (pLit "where") pDefns
+
+
+mkScWhere (PatScDefn name [(pattern, expr)]) _ defns = PatScDefn name [(pattern, expr')]
+    where expr' = ELet True defns expr
 
 
 pExpr :: Parser (Expr Pattern)
