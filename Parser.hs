@@ -8,6 +8,7 @@ import List
 import Debug.Trace
 import AbstractDataTypes
 import ParserTypes
+import Prelude hiding (lex)
 
 
 isAtomicExpr :: Expr a -> Bool
@@ -22,7 +23,7 @@ keywords = ["where", "data", "let", "letrec", "case", "in", "of", "Pack"]
 
 --parser implementation
 parse :: String -> PatProgram
-parse = syntax . clex
+parse = syntax . lex
 
 
 -- parser functions

@@ -2,43 +2,43 @@ module Lexer where
 
 import Char
 
-type Token = [Char]
+type Token = String
 type TokenInfo = (Int, Token)
 
 twoCharOps = ["==", "~=", ">=", "<=", "->"]
 
 -- lexer implementation
-clex :: String -> [Token]
-clex s = map snd $ clex' s 1
+lex :: String -> [Token]
+lex s = map snd $ lex' s 1
 
-clex' :: String -> Int -> [TokenInfo]
-clex' [] _ = []
+lex' :: String -> Int -> [TokenInfo]
+lex' [] _ = []
 -- ignore whitespaces
-clex' (c : cs) lnum | isWhiteSpace c = clex' cs lnum
+lex' (c : cs) lnum | isWhiteSpace c = lex' cs lnum
 -- ignore newlines
-clex' (c : cs) lnum | isNewLine c = clex' cs (lnum+1)
+lex' (c : cs) lnum | isNewLine c = lex' cs (lnum+1)
 -- numbers
-clex' (c : cs) lnum | isDigit c =
-    (lnum, numToken) : clex' restCs lnum
+lex' (c : cs) lnum | isDigit c =
+    (lnum, numToken) : lex' restCs lnum
     where
         numToken = c : takeWhile isDigit cs
         restCs = dropWhile isDigit cs
 -- variable names
-clex' (c : cs) lnum | isAlpha c =
-    (lnum, varToken) : clex' restCs lnum
+lex' (c : cs) lnum | isAlpha c =
+    (lnum, varToken) : lex' restCs lnum
     where
         varToken = c : takeWhile isIdChar cs
         restCs = dropWhile isIdChar cs
 -- comments
-clex' (c1 : c2 : cs) lnum | isComment c1 c2 = clex' restCs (lnum+1)
+lex' (c1 : c2 : cs) lnum | isComment c1 c2 = lex' restCs (lnum+1)
     where
         restCs = dropWhile (not . isNewLine) cs
 -- relational operators
-clex' (c1 : c2 : cs) lnum | op `elem` twoCharOps = (lnum, op) : clex' cs (lnum+1)
+lex' (c1 : c2 : cs) lnum | op `elem` twoCharOps = (lnum, op) : lex' cs (lnum+1)
     where
         op = [c1] ++ [c2]
 -- other
-clex' (c : cs) lnum = (lnum, [c]) : clex' cs lnum
+lex' (c : cs) lnum = (lnum, [c]) : lex' cs lnum
 
 
 -- private helper functions
