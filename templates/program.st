@@ -3,6 +3,9 @@ declare i8* @malloc(i64)
 declare i8* @memcpy(i8*, i8*, i64)
 
 
+$erlang()$
+
+
 ; constants
 @getErrStr = internal constant [63 x i8] c"ERROR: Item different than expected found while running GMGet\\0A\\00"
 @s = internal constant [7 x i8] c"ERROR\\0A\\00"
@@ -615,6 +618,7 @@ define void @printConstr(i64* %pret) {
 $constrFuns$
 
 define i64 @main() {
+    call void @erl_interface_init()
     store i64 0, i64* @sp
     store i64 0, i64* @vsp
     call void()* @_main()
