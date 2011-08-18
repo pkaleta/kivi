@@ -93,7 +93,11 @@ codegenPath = "codegen/"
 
 
 createNameArityCodeMapping :: GmHeap -> GmGlobals -> NameArityCodeMapping
-createNameArityCodeMapping heap globals = Map.fromList [createEntry heap name addr | (name, addr) <- globals]
+createNameArityCodeMapping heap globals = Map.union globalMapping builtinMapping
+    where
+        globalMapping = Map.fromList [createEntry heap name addr | (name, addr) <- globals]
+        builtinMapping = Map.fromList [("connect", (0, [])),
+                                       ("send", (1, []))]
 
 
 createEntry :: GmHeap -> Name -> Addr -> (Name, (Arity, GmCode))
@@ -187,9 +191,9 @@ translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushint n) = (next
         template' = setManyAttrib [("n", show n), ("ninstr", show ninstr)] template
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Pushglobal v) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
-        Just template = getStringTemplate "pushglobal" templates
         template' = setManyAttrib [("arity", show arity), ("name", mkFunName v), ("ninstr", show ninstr)] template
-        Just (arity, code) = trace ("********** " ++ show v ++ ", " ++ show (Map.lookup v mapping)) Map.lookup v mapping
+        Just (arity, code) = Map.lookup v mapping
+        Just template = getStringTemplate "pushglobal" templates
 translateToLLVMIR mapping templates (reg, stack, ir, ninstr) (Mkap) = (reg, stack, ir ++ [template'], ninstr + 1)
     where
         Just template = getStringTemplate "mkap" templates

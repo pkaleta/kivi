@@ -141,11 +141,21 @@ syntax = takeFirstParse . pProgram
 
 
 pList :: Parser (Expr Pattern)
-pList = pThen3 mkList (pLit "[") (pZeroOrMoreWithSep pExpr (pLit ",")) (pLit "]")
+pList =
+    pThen3 mkList (pLit "[") (pZeroOrMoreWithSep pExpr (pLit ",")) (pLit "]") `pOr`
+    pThen3 selSecond (pLit "(") pConsList (pLit ")")
     where
         mkList _ exprs _ = foldr cons (EConstrName "Nil") exprs
+        selSecond _ list _ = list
 
-        cons expr list = EAp (EAp (EConstrName "Cons") expr) list
+
+pConsList :: Parser (Expr Pattern)
+pConsList = pThen3 mkList pExpr (pLit ":") pExpr
+    where mkList head _ tail = cons head tail
+
+
+cons :: Expr Pattern -> Expr Pattern -> Expr Pattern
+cons expr list = EAp (EAp (EConstrName "Cons") expr) list
 
 
 pTuple :: Parser (Expr Pattern)
@@ -166,13 +176,19 @@ pPatternExpr =
     (pChar `pApply` PChar) `pOr`
     pThen mkConstr pConstrName (pZeroOrMore pPatternExpr) `pOr`
     pThen3 mkListPattern (pLit "[") (pZeroOrMoreWithSep pPatternExpr (pLit ",")) (pLit "]") `pOr`
+    pThen3 mkParenExpr (pLit "(") pPatternConsList (pLit ")") `pOr`
     pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
     where
         mkListPattern _ patterns _ = foldr cons (PConstrName "Nil" []) patterns
         mkConstr name patExprs = PConstrName name patExprs
         mkParenExpr _ expr _ = expr
 
-        cons expr list = trace ("\n\n*************" ++ show expr ++ ", " ++ show list ++ "\n\n") PConstrName "Cons" [expr, list]
+        cons expr list = PConstrName "Cons" [expr, list]
+
+
+pPatternConsList :: Parser Pattern
+pPatternConsList = pThen3 mkList pPatternExpr (pLit ":") pPatternExpr
+    where mkList head _ tail = PConstrName "Cons" [head, tail]
 
 
 pConstrDecl :: Parser Constructor
