@@ -90,6 +90,7 @@ getTuplePattern adts pattern = (PConstr tag arity patterns)
 
 getPatternVarNames :: Pattern -> [Name]
 getPatternVarNames (PNum n) = []
+getPatternVarNames (PChar c) = []
 getPatternVarNames (PVar v) = [v]
 getPatternVarNames (PConstr tag arity patterns) = foldl collectVars [] patterns
     where
