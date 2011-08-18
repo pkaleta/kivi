@@ -88,6 +88,7 @@ matchSc dts (PatScDefn name eqs) = (PatScDefn name [(vars, expr')])
 
 matchExpr :: NameSupply -> [DataType] -> Expr Pattern -> Expr Pattern -> (NameSupply, Expr Pattern)
 matchExpr ns dts (ENum n) def = (ns, ENum n)
+matchExpr ns dts (EChar c) def = (ns, EChar c)
 matchExpr ns dts (EVar v) def = (ns, EVar v)
 matchExpr ns dts (EConstr t a) def = (ns, EConstr t a)
 matchExpr ns dts (ESelect arity pos name) def = (ns, ESelect arity pos name)

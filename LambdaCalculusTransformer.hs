@@ -48,6 +48,7 @@ transformSc (PatScDefn name [(patterns, expr)]) =
 
 transformExpr :: Expr Pattern -> CoreExpr
 transformExpr (ENum n) = ENum n
+transformExpr (EChar n) = EChar n
 transformExpr (EVar v) = EVar v
 transformExpr (EConstr t a) = EConstr t a
 transformExpr (EAp e1 e2) = EAp (transformExpr e1) (transformExpr e2)

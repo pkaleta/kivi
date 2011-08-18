@@ -52,6 +52,7 @@ analyseDeps (adts, scs) = (adts, scs')
 
 analyseExpr :: AnnExpr Name (Set Name) -> CoreExpr
 analyseExpr (free, ANum n) = ENum n
+analyseExpr (free, AChar c) = EChar c
 analyseExpr (free, AVar v) = EVar v
 analyseExpr (free, AConstr t a) = EConstr t a
 analyseExpr (free, AAp e1 e2) = EAp (analyseExpr e1) (analyseExpr e2)

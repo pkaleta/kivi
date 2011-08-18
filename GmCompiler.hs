@@ -157,6 +157,7 @@ compileB expr env =
 
 compileE :: GmCompiler
 compileE (ENum n) env = [Pushint n]
+compileE (EChar c) env = [Pushchar c]
 compileE (ELet isRec defs body) env | isRec = compileLetrec [Slide $ length defs] compileE defs body env
                                     | otherwise = compileLet [Slide $ length defs] compileE defs body env
 compileE (ECaseSimple expr alts) env =
@@ -199,6 +200,7 @@ compileA comp (num, expr) env = (num, comp expr env)
 
 compileC :: GmCompiler
 compileC (ENum n) env = [Pushint n]
+compileC (EChar c) env = [Pushchar c]
 compileC (EVar v) env =
     case aHasKey env v of
         True -> [Push $ aLookup env v $ error "This is not possible"]

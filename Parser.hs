@@ -66,6 +66,14 @@ pNum = (pSat isNumber) `pApply` strToInt
         isNumber _ = False
         strToInt x = read x :: Int
 
+pChar :: Parser Char
+pChar = pThen3 mkChar (pLit "'") (pSat isSingleChar) (pLit "'")
+    where mkChar _ [c] _ = c
+
+
+isSingleChar :: String -> Bool
+isSingleChar s = length s == 1
+
 
 pOr :: Parser a -> Parser a -> Parser a
 pOr p1 p2 tokens = (p1 tokens) ++ (p2 tokens)
@@ -154,6 +162,7 @@ pPatternExpr :: Parser Pattern
 pPatternExpr =
     (pVar `pApply` PVar) `pOr`
     (pNum `pApply` PNum) `pOr`
+    (pChar `pApply` PChar) `pOr`
     pThen mkConstr pConstrName (pZeroOrMore pPatternExpr) `pOr`
     pThen3 mkListPattern (pLit "[") (pZeroOrMoreWithSep pPatternExpr (pLit ",")) (pLit "]") `pOr`
     pThen3 mkParenExpr (pLit "(") pPatternExpr (pLit ")")
@@ -218,6 +227,7 @@ pAtomicExpr :: Parser (Expr Pattern)
 pAtomicExpr =
     (pVar `pApply` EVar) `pOr`
     (pNum `pApply` ENum) `pOr`
+    (pChar `pApply` EChar) `pOr`
     (pConstrName `pApply` EConstrName) `pOr`
     pThen3 mkParenExpr (pLit "(") pExpr (pLit ")") `pOr`
     pList `pOr`

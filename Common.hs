@@ -9,6 +9,7 @@ import Data.String.Utils
 data Expr a
     = EVar Name                             -- variables
     | ENum Int                              -- numbers
+    | EChar Char
     | EConstrName Name
     | EConstr Int Int                       -- constructor (tag, arity)
     | EAp (Expr a) (Expr a)                 -- applications
@@ -47,6 +48,7 @@ instance Show a => Show (ScDefn a) where
 
 data Pattern = PNum Int
              | PVar Name
+             | PChar Char
              | PConstrName Name [Pattern]
              | PConstr Int Int [Pattern]
              | PDefault
@@ -73,6 +75,7 @@ data Instruction = Unwind
                  | Pushglobal Name
                  | Pushconstr Int Int
                  | Pushint Int
+                 | Pushchar Char
                  | Push Int
                  | Mkap
                  | Update Int
@@ -100,6 +103,7 @@ instance Eq Instruction
         Unwind == Unwind = True
         Pushglobal a == Pushglobal b = a == b
         Pushint a == Pushint b = a == b
+        Pushchar a == Pushchar b = a == b
         Push a == Push b = a == b
         Mkap == Mkap = True
         Update a == Update b = a == b
@@ -117,6 +121,7 @@ type GmDumpItem = (GmCode, GmStack, GmVStack)
 type GmHeap = Heap Node
 
 data Node = NNum Int            -- numbers
+          | NChar Char
           | NAp Addr Addr       -- applications
           | NGlobal Int GmCode  -- global names (functions, numbers, variables, etc.)
           | NInd Addr           -- indirection nodes (updating the root of redex)
@@ -199,6 +204,7 @@ showExpr = showExpr' 0
 showExpr' :: Show a => Int -> Expr a -> String
 showExpr' indent (EVar v) = v
 showExpr' indent (ENum n) = show n
+showExpr' indent (EChar c) = show c
 --TODO: retrieve the name of constructor
 showExpr' indent (EConstr t a) = "CONSTR" ++ show t
 showExpr' indent (EAp e1 e2) = "(" ++ showExpr' indent e1 ++ " " ++ showExpr' indent e2 ++ ")"

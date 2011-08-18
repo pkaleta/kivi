@@ -25,6 +25,7 @@ run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps .
 
 makeStr :: GmHeap -> Node -> String
 makeStr heap (NNum n) = show n
+makeStr heap (NChar c) = show c
 makeStr heap (NAp a1 a2) = "(" ++ makeStr heap n1 ++ " " ++ makeStr heap n2 ++ ")"
     where
         n1 = hLookup heap a1
@@ -82,6 +83,7 @@ dispatch Unwind              = unwind
 dispatch (Pushglobal f)      = pushglobal f
 dispatch (Pushconstr t a)    = pushconstr t a
 dispatch (Pushint n)         = pushint n
+dispatch (Pushchar c)        = pushchar c
 dispatch (Push n)            = push n
 dispatch Mkap                = mkap
 dispatch (Update n)          = update n
@@ -121,6 +123,7 @@ unwind state = newState (hLookup heap addr) state
 
 newState :: Node -> GmState -> GmState
 newState (NNum n) state = unwindDump state
+newState (NChar c) state = unwindDump state
 newState (NConstr t as) state = unwindDump state
 newState (NAp a1 a2) state = putCode [Unwind] $ putStack (a1 : getStack state) state
 newState (NGlobal argc code) state =
@@ -176,15 +179,15 @@ pushconstr tag arity state =
         heap = getHeap state
 
 
-pushint :: Int -> GmState -> GmState
-pushint n state =
-    case aLookup globals numStr (-1) of
+pushgen :: Show a => a -> (a -> Node) -> GmState -> GmState
+pushgen v mkNode state =
+    case aLookup globals str (-1) of
         -1 ->
             putStack stack' $ putHeap heap' $ putGlobals globals' state
             where
-                (heap', addr) = hAlloc heap $ NNum n
+                (heap', addr) = hAlloc heap $ mkNode v
                 stack' = addr : stack
-                globals' = (numStr, addr) : globals
+                globals' = (str, addr) : globals
         addr ->
             putStack stack' state
             where
@@ -193,7 +196,15 @@ pushint n state =
         heap = getHeap state
         stack = getStack state
         globals = getGlobals state
-        numStr = show n
+        str = show v
+
+
+pushint :: Int -> GmState -> GmState
+pushint n = pushgen n NNum
+
+pushchar :: Char -> GmState -> GmState
+pushchar c = pushgen c NChar
+
 
 mkap :: GmState -> GmState
 mkap state =
@@ -347,6 +358,7 @@ print2 :: GmState -> GmState
 print2 state =
     case hLookup (getHeap state) a of
         (NNum n) -> putOutput (output ++ show n ++ ", ") $ putStack as state
+        (NChar c) -> putOutput (output ++ show c ++ ", ") $ putStack as state
         (NConstr t as) -> putOutput output' $ putCode code' $ putStack stack' state
             where
                 code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)

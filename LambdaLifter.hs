@@ -17,6 +17,7 @@ type AnnExpr a b = (b, AnnExpr' a b)
 
 data AnnExpr' a b = AVar Name
                   | ANum Int
+                  | AChar Char
                   | AConstr Int Int
                   | AAp (AnnExpr a b) (AnnExpr a b)
                   | ALet IsRec [AnnDefn a b] (AnnExpr a b)
@@ -49,6 +50,7 @@ freeVars ((ScDefn name args expr) : scs) = (AnnScDefn name args $ calcFreeVars (
 
 calcFreeVars :: (Set Name) -> CoreExpr -> AnnExpr Name (Set Name)
 calcFreeVars localVars (ENum n) = (Set.empty, ANum n)
+calcFreeVars localVars (EChar c) = (Set.empty, AChar c)
 calcFreeVars localVars (EVar v) | Set.member v localVars = (Set.singleton v, AVar v)
                                 | otherwise              = (Set.empty, AVar v)
 calcFreeVars localVars (EAp e1 e2) = (Set.union s1 s2, AAp ae1 ae2)
@@ -106,6 +108,7 @@ abstract program = [ScDefn name args (abstractExpr expr) | AnnScDefn name args e
 
 abstractExpr :: AnnExpr Name (Set Name) -> CoreExpr
 abstractExpr (freeVars, ANum n) = ENum n
+abstractExpr (freeVars, AChar c) = EChar c
 abstractExpr (freeVars, AVar v) = EVar v
 abstractExpr (freeVars, AAp e1 e2) = EAp (abstractExpr e1) (abstractExpr e2)
 abstractExpr (freeVars, ALet isRec defns expr) =
@@ -158,6 +161,7 @@ renameExpr :: (NameSupply -> [a] -> (NameSupply, [a], Map Name Name)) -- functio
            -> Expr a
            -> (NameSupply, Expr a)
 renameExpr newNamesFun mapping ns (ENum n) = (ns, ENum n)
+renameExpr newNamesFun mapping ns (EChar c) = (ns, EChar c)
 renameExpr newNamesFun mapping ns (EVar v) =
     (ns, EVar v') -- for built-int functions (+,-, etc.) we have to use old name
     where
@@ -246,6 +250,7 @@ collectSc scsAcc (ScDefn name args expr) =
 
 collectExpr :: CoreExpr -> ([CoreScDefn], CoreExpr)
 collectExpr (ENum n) = ([], ENum n)
+collectExpr (EChar c) = ([], EChar c)
 collectExpr (EVar v) = ([], EVar v)
 collectExpr (EAp e1 e2) =
     (scs1 ++ scs2, EAp e1' e2')

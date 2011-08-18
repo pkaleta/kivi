@@ -27,6 +27,7 @@ separateLambdas ((ScDefn name args expr) : scs) = (ScDefn name [] (mkSepArgs arg
 
 separateLambdasExpr :: CoreExpr -> CoreExpr
 separateLambdasExpr (ENum n) = ENum n
+separateLambdasExpr (EChar c) = EChar c
 separateLambdasExpr (EVar v) = EVar v
 separateLambdasExpr (EConstr t a) = EConstr t a
 separateLambdasExpr (EAp e1 e2) = EAp (separateLambdasExpr e1) (separateLambdasExpr e2)
@@ -67,6 +68,7 @@ freeToLevel ((AnnScDefn name [] expr) : scs) = (AnnScDefn name [] $ freeToLevelE
 
 freeToLevelExpr :: Level -> Map Name Level -> AnnExpr Name (Set Name) -> AnnExpr (Name, Level) Level
 freeToLevelExpr level env (free, ANum n) = (0, ANum n)
+freeToLevelExpr level env (free, AChar c) = (0, AChar c)
 freeToLevelExpr level env (free, AVar v) = (varLevel, AVar v)
     where
         varLevel = case Map.lookup v env of
@@ -172,6 +174,7 @@ identifyMFEsExpr cxtLevel (exprLevel, expr) =
 
 identifyMFEsExpr1 :: Level -> AnnExpr' (Name, Level) Level -> Expr (Name, Level)
 identifyMFEsExpr1 level (ANum n) = ENum n
+identifyMFEsExpr1 level (AChar c) = EChar c
 identifyMFEsExpr1 level (AVar v) = EVar v
 identifyMFEsExpr1 level (AConstr t a) = EConstr t a
 identifyMFEsExpr1 level (AAp e1 e2) = EAp (identifyMFEsExpr level e1) (identifyMFEsExpr level e2)
@@ -248,6 +251,7 @@ collectFloatedSc scsAcc (ScDefn name [] expr) =
 
 floatExpr :: Expr (Name, Level) -> (FloatedDefns, CoreExpr)
 floatExpr (ENum n) = ([], ENum n)
+floatExpr (EChar c) = ([], EChar c)
 floatExpr (EVar v) = ([], EVar v)
 floatExpr (EConstr t a) = ([], EConstr t a)
 floatExpr (EAp e1 e2) = (fds1 ++ fds2, EAp e1' e2')
