@@ -15,6 +15,7 @@ import LazyLambdaLifter
 import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
+import Data.Char
 
 
 --runTest :: String -> CoreProgram
@@ -25,7 +26,7 @@ run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps .
 
 makeStr :: GmHeap -> Node -> String
 makeStr heap (NNum n) = show n
-makeStr heap (NChar c) = show c
+makeStr heap (NChar c) = show . chr $ c
 makeStr heap (NAp a1 a2) = "(" ++ makeStr heap n1 ++ " " ++ makeStr heap n2 ++ ")"
     where
         n1 = hLookup heap a1
@@ -179,8 +180,8 @@ pushconstr tag arity state =
         heap = getHeap state
 
 
-pushgen :: Show a => a -> (a -> Node) -> GmState -> GmState
-pushgen v mkNode state =
+pushgen :: Int -> (Int -> String) -> (Int -> Node) -> GmState -> GmState
+pushgen v mkStr mkNode state =
     case aLookup globals str (-1) of
         -1 ->
             putStack stack' $ putHeap heap' $ putGlobals globals' state
@@ -196,14 +197,14 @@ pushgen v mkNode state =
         heap = getHeap state
         stack = getStack state
         globals = getGlobals state
-        str = show v
+        str = mkStr v
 
 
 pushint :: Int -> GmState -> GmState
-pushint n = pushgen n NNum
+pushint n = pushgen n show NNum
 
-pushchar :: Char -> GmState -> GmState
-pushchar c = pushgen c NChar
+pushchar :: Int -> GmState -> GmState
+pushchar c = pushgen c (show . chr) NChar
 
 
 mkap :: GmState -> GmState
@@ -335,6 +336,9 @@ findMatchingBranch ([(-1, code)]) node = Just code
 findMatchingBranch ((n, code) : bs) node@(NNum n')
     | n == n'   = Just code
     | otherwise = findMatchingBranch bs node
+findMatchingBranch ((n, code) : bs) node@(NChar n')
+    | n == n'   = Just code
+    | otherwise = findMatchingBranch bs node
 findMatchingBranch ((n, code) : bs) node@(NConstr tag args)
     | n == tag  = Just code
     | otherwise = findMatchingBranch bs node
@@ -358,7 +362,7 @@ print2 :: GmState -> GmState
 print2 state =
     case hLookup (getHeap state) a of
         (NNum n) -> putOutput (output ++ show n ++ ", ") $ putStack as state
-        (NChar c) -> putOutput (output ++ show c ++ ", ") $ putStack as state
+        (NChar c) -> putOutput (output ++ (show . chr $ c) ++ ", ") $ putStack as state
         (NConstr t as) -> putOutput output' $ putCode code' $ putStack stack' state
             where
                 code' = (foldl (\acc arg -> acc ++ [Eval, Print]) [] as) ++ (getCode state)

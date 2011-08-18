@@ -17,7 +17,7 @@ type AnnExpr a b = (b, AnnExpr' a b)
 
 data AnnExpr' a b = AVar Name
                   | ANum Int
-                  | AChar Char
+                  | AChar Int
                   | AConstr Int Int
                   | AAp (AnnExpr a b) (AnnExpr a b)
                   | ALet IsRec [AnnDefn a b] (AnnExpr a b)

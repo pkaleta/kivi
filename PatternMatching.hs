@@ -13,7 +13,7 @@ import LetTransformer
 import CaseTransformer
 
 
-data PatternClass = Num | Var | Constr
+data PatternClass = Num | Var | Constr | Char
 
 instance Eq PatternClass where
     Num == Num = True
@@ -57,6 +57,7 @@ classifyEquation :: Equation -> PatternClass
 classifyEquation (PVar name : ps, expr) = Var
 classifyEquation (PConstr tag arity ps' : ps, expr) = Constr
 classifyEquation (PNum n : ps, expr) = Num
+classifyEquation (PChar c : ps, expr) = Char
 
 
 isConstr :: Equation -> Bool
@@ -131,7 +132,8 @@ matchPatternClass ns dts n vars eqs def =
     case classifyEquation $ head eqs of
         Constr -> matchConstr ns dts n vars eqs def
         Var    -> matchVar ns dts n vars eqs def
-        Num    -> matchNum ns dts n vars eqs def
+        Num    -> matchGen ns dts n vars eqs def
+        Char   -> matchGen ns dts n vars eqs def
 
 
 matchVar :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
@@ -139,8 +141,8 @@ matchVar ns dts n (var : vars) eqs def =
     matchEquations ns dts n vars [(ps, subst expr var name) | (PVar name : ps, expr) <- eqs] def
 
 
-matchNum :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
-matchNum ns dts n vars@(v : vs) eqs def =
+matchGen :: NameSupply -> [DataType] -> Int -> [Name] -> [Equation] -> Expr Pattern -> (NameSupply, Expr Pattern)
+matchGen ns dts n vars@(v : vs) eqs def =
     (ns', ECase (EVar v) (alts ++ [(PDefault, def)]))
     where
         (ns', alts) = mapAccumL matchAlts ns eqs

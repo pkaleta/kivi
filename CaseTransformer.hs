@@ -5,6 +5,7 @@ import Common
 import Utils
 import NameSupply
 import ParserTypes
+import Data.Char
 
 
 defaultTag :: Int
@@ -41,6 +42,7 @@ transformCaseSum ns dts expr@(EVar name) alts =
     -- checking would prevent such situation.
     case head alts of
         (PNum n, body) -> transformCaseSimple ns dts expr alts
+        (PChar c, body) -> transformCaseSimple ns dts expr alts
         (PConstr t a ps, body) -> transformCaseConstr ns dts expr alts
         (pattern, body) -> error $ "Unexpected pattern while transforming case expressions: " ++ show pattern
 transformCaseSum ns dts expr alts = ELet False [(PVar name, expr)] (transformCaseSum ns' dts (EVar name) alts)
@@ -60,6 +62,7 @@ transformCaseSimple ns dts expr@(EVar name) alts = ECaseSimple expr alts'
                 True -> oldAcc
                 False -> case pattern of
                     (PNum n)   -> (False, acc ++ [(n, expr)])
+                    (PChar c)   -> (False, acc ++ [(c, expr)])
                     _          -> (True, acc ++ [(defaultTag, expr)])
 
         defExpr = EError "No matching pattern found"

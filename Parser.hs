@@ -9,6 +9,7 @@ import Debug.Trace
 import AbstractDataTypes
 import ParserTypes
 import Prelude hiding (lex)
+import Data.Char
 
 
 isAtomicExpr :: Expr a -> Bool
@@ -66,9 +67,9 @@ pNum = (pSat isNumber) `pApply` strToInt
         isNumber _ = False
         strToInt x = read x :: Int
 
-pChar :: Parser Char
+pChar :: Parser Int
 pChar = pThen3 mkChar (pLit "'") (pSat isSingleChar) (pLit "'")
-    where mkChar _ [c] _ = c
+    where mkChar _ [c] _ = ord c
 
 
 isSingleChar :: String -> Bool
