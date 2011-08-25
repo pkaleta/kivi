@@ -1,0 +1,8 @@
+main =
+    letrec
+        x       = 10;
+        fac n   = if (n == 0) 1 (n * fac(n-1));
+        res     = fac x;
+        gcd a b = if (b == 0) a (gcd b (a % b))
+    in
+        gcd 24 18
