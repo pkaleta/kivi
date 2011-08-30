@@ -127,6 +127,7 @@ data Node = NNum Int            -- numbers
           | NGlobal Int GmCode  -- global names (functions, numbers, variables, etc.)
           | NInd Addr           -- indirection nodes (updating the root of redex)
           | NConstr Int [Addr]  -- constructor nodes
+          | NMarked Node
     deriving Show
 instance Eq Node
     where

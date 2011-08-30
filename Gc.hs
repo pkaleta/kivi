@@ -1,36 +1,36 @@
 module Gc where
 
+import Common
 import Utils
-import Defs
 
-gc :: TiState -> TiState
-gc state = (stack, dump, heap', globals, stats, output)
+gc :: GmState -> GmState
+gc state = putHeap heap' state
     where
         heap' = scanHeap $ foldl markFrom heap $ findRoots state
-        (stack, dump, heap, globals, stats, output) = state
+        heap = getHeap state
 
-markFrom :: TiHeap -> Addr -> TiHeap
+markFrom :: GmHeap -> Addr -> GmHeap
 markFrom heap addr =
     case node of
         NMarked node -> heap
         NAp a1 a2 -> heap2
             where
-                heap1 = markFrom heap' a1
+                heap1 = markFrom heap0 a1
                 heap2 = markFrom heap1 a2
-        NSc name vars expr -> heap'
-        NNum n -> heap'
-        NInd addr -> heap'
+        NGlobal arity code -> heap0
+        NNum n -> heap0
+        NChar c -> heap0
+        NInd addr -> heap0
             where
-                heap' = markFrom heap addr
-        NPrim name primitive -> heap'
-        NData tag addrs -> newHeap
+                heap1 = markFrom heap0 addr
+        NConstr tag args -> heap1
             where
-                newHeap = foldl markFrom heap' addrs
+                heap1 = foldl markFrom heap0 args
     where
         node = hLookup heap addr
-        heap' = hUpdate heap addr $ NMarked node
+        heap0 = hUpdate heap addr $ NMarked node
 
-scanHeap :: TiHeap -> TiHeap
+scanHeap :: GmHeap -> GmHeap
 scanHeap heap =
     foldl analyse heap addrs
     where
@@ -44,14 +44,18 @@ scanHeap heap =
             where
                 node = hLookup heap addr
 
-findRoots (stack, dump, heap, globals, stats, output) =
-    findStackRoots stack ++ findDumpRoots dump ++ findGlobalRoots globals
+findRoots state =
+    findStackRoots (getStack state) ++
+    findDumpRoots (getDump state) ++
+    findGlobalRoots (getGlobals state)
 
-findStackRoots :: TiStack -> [Addr]
+findStackRoots :: GmStack -> [Addr]
 findStackRoots stack = stack
 
-findDumpRoots :: TiDump -> [Addr]
-findDumpRoots dump = foldl (++) [] dump
+findDumpRoots :: GmDump -> [Addr]
+findDumpRoots dump = foldl collectRoots [] dump
+    where
+        collectRoots roots (code, stack, vstack) = roots ++ findStackRoots stack
 
-findGlobalRoots :: TiGlobals -> [Addr]
+findGlobalRoots :: GmGlobals -> [Addr]
 findGlobalRoots globals = map snd globals
