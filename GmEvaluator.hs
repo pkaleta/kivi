@@ -19,10 +19,25 @@ import Data.Char
 
 
 --runTest :: String -> CoreProgram
-runTest = lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
+runTest = lambdaLift
+        . lazyLambdaLift
+        . analyseDeps
+        . transformToLambdaCalculus
+        . mergePatterns
+        . tag
+        . parse
 
 run :: String -> String
-run = showResults . eval . compile . lambdaLift . lazyLambdaLift . analyseDeps . transformToLambdaCalculus . mergePatterns . tag . parse
+run = showResults
+    . eval
+    . compile
+    . lambdaLift
+    . lazyLambdaLift
+    . analyseDeps
+    . transformToLambdaCalculus
+    . mergePatterns
+    . tag
+    . parse
 
 makeStr :: GmHeap -> Node -> String
 makeStr heap (NNum n) = show n
