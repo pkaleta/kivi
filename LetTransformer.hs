@@ -46,7 +46,7 @@ transformLet' ns adts expr = (ns, expr)
 isRefutable :: [DataType] -> Pattern -> Bool
 isRefutable adts (PVar v) = False
 isRefutable adts (PConstr tag arity args) =
-    ((length $ constructors tag adts) > 1) || (foldl (||) False [isRefutable adts arg | arg <- args])
+    ((length $ constructors tag adts) > 1) || (or [isRefutable adts arg | arg <- args])
 isRefutable adts other = True
 
 
