@@ -19,7 +19,8 @@ import Data.Char
 
 
 --runTest :: String -> CoreProgram
-runTest = lambdaLift
+runTest = typeCheck
+        . lambdaLift
         . lazyLambdaLift
         . analyseDeps
         . transformToLambdaCalculus
