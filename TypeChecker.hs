@@ -86,6 +86,10 @@ bool :: TypeExpr
 bool = TypeOp "bool" []
 
 
+char :: TypeExpr
+char = TypeOp "char" []
+
+
 cross :: TypeExpr -> TypeExpr -> TypeExpr
 cross t1 t2 = TypeOp "cross" [t1, t2]
 
@@ -132,7 +136,7 @@ updateExpr state expr = error $ "updateExpr: " ++ show expr
 
 
 updateCase :: State
-           ->(TypedExpr Name -> [TypedAlt Name] -> TypedExpr' Name)
+           -> (TypedExpr Name -> [TypedAlt Name] -> TypedExpr' Name)
            -> TypedExpr Name
            -> [TypedAlt Name]
            -> TypedExpr' Name
@@ -174,24 +178,8 @@ typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2')
         (state3, resType) = newTypeVariable state2
 
         (state4, _, _) = unify state3 (argType `arrow` resType) funType
--- Here we assume that lambdas has already been split and contain one argument only
---typeCheckExpr state lambda@(ELam [v] expr) = (state4, (resType, TLam [v] typedExpr))
---    where
---        (state1, argType@(TypeVar tvn Nothing)) = newTypeVariable state
---        state2 = state1 { typeEnv = Map.insert v argType $ typeEnv state1 }
---        state3 = state2 { nonGeneric = Set.insert tvn $ nonGeneric state2 }
---        (state4, typedExpr@(exprType, expr')) = typeCheckExpr state3 expr
---        resType = argType `arrow` exprType
 typeCheckExpr state env nonGeneric expr@(ELet False defns body) =
     typeCheckLet state env nonGeneric defns body
---typeCheckExpr state env nonGeneric expr@(ELet True defns body) =
---    typeCheckLetrec state env nonGeneric defns body
---typeCheckExpr state (ECaseSimple expr alts) = (state4, (altType, TCaseSimple expr' alts'))
---    where
---        (state1, expr'@(exprType, _)) = typeCheckExpr state expr
---        (state2, _, _) = unify state1 exprType int
---        (state3, altType) = newTypeVariable state2
---        ((state4, _), alts') = mapAccumL typeCheckAlt (state3, altType) alts
 typeCheckExpr state env nonGeneric constr@(EConstr _ _) = typeCheckConstr state env nonGeneric constr
 typeCheckExpr state _ _ expr = error $ "typeCheckExpr: " ++ show expr
 
