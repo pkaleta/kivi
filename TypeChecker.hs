@@ -192,13 +192,20 @@ typeCheckExpr state env nonGeneric expr@(ELet False defns body) =
 --        (state2, _, _) = unify state1 exprType int
 --        (state3, altType) = newTypeVariable state2
 --        ((state4, _), alts') = mapAccumL typeCheckAlt (state3, altType) alts
-typeCheckExpr state env nonGeneric (EConstr 2 arity) =
-    (state', (list t, TConstr nilTag arity))
-    where (state', t) = newTypeVariable state
-typeCheckExpr state env nonGeneric (EConstr 3 arity) =
-    (state', (t `arrow` ((list t) `arrow` (list t)), TConstr nilTag arity))
-    where (state', t) = newTypeVariable state
+typeCheckExpr state env nonGeneric constr@(EConstr _ _) = typeCheckConstr state env nonGeneric constr
 typeCheckExpr state _ _ expr = error $ "typeCheckExpr: " ++ show expr
+
+
+typeCheckConstr :: State -> TypeEnv -> NonGeneric -> CoreExpr -> (State, TypedExpr Name)
+typeCheckConstr state env nonGeneric (EConstr tag arity)
+    | tag == nilTag =
+        let (state', t) = newTypeVariable state
+        in (state', (list t, TConstr nilTag arity))
+    | tag == consTag =
+        let (state', t) = newTypeVariable state
+        in (state', (t `arrow` ((list t) `arrow` (list t)), TConstr nilTag arity))
+    | tag == falseTag = (state, (bool, TConstr 0 arity))
+    | tag == trueTag = (state, (bool, TConstr 0 arity))
 
 
 typeCheckLet :: State -> TypeEnv -> NonGeneric -> [CoreDefn] -> CoreExpr -> (State, TypedExpr Name)
