@@ -18,9 +18,25 @@ trueTag = 1
 falseTag :: Tag
 falseTag = 0
 
+consTag :: Tag
+consTag = 3
+
+
+nilTag :: Tag
+nilTag = 2
+
+
+initialTag :: Tag
+initialTag = 4
+
+
+undefinedTag :: Tag
+undefinedTag = -1
+
+
 primitiveADTs :: [DataType]
 primitiveADTs = [("Bool", [("True", trueTag, 0), ("False", falseTag, 0)]),
-                 ("List", [("Nil", undefinedTag, 0), ("Cons", undefinedTag, 2)]),
+                 ("List", [("Nil", nilTag, 0), ("Cons", consTag, 2)]),
                  ("Tuple0", [("Tuple0", undefinedTag, 0)]),
                  ("Tuple1", [("Tuple1", undefinedTag, 1)]),
                  ("Tuple2", [("Tuple2", undefinedTag, 2)]),
@@ -64,16 +80,6 @@ findConstrByName :: Name -> [Constructor] -> Maybe Constructor
 findConstrByName name ((name', tag, arity) : cs) | name == name' = Just (name, tag, arity)
                                                 | otherwise     = findConstrByName name cs
 findConstrByName name []                                        = Nothing
-
-
-
-
-initialTag :: Tag
-initialTag = 2
-
-
-undefinedTag :: Tag
-undefinedTag = -1
 
 
 tag :: PatProgram -> PatProgram
