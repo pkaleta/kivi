@@ -129,8 +129,8 @@ compileR d (ELet isRec defs body) env | isRec = compileLetrec [] (compileR $ d +
                                       | otherwise = compileLet [] (compileR $ d + n) defs body env
     where n = length defs
 compileR d (EAp (EAp (EAp (EVar "if") cond) et) ef) env =
-    compileE cond env ++ [CasejumpConstr [(trueTag, compileR d et $ argOffset 1 env),
-                                          (falseTag, compileR d ef $ argOffset 1 env)]]
+    compileE cond env ++ [CasejumpConstr [(trueTag, compileR (d+1) et $ argOffset 1 env),
+                                          (falseTag, compileR (d+1) ef $ argOffset 1 env)]]
 compileR d (ECaseSimple expr alts) env =
     compileE expr env ++ [CasejumpSimple $ compileD (compileR $ d + 1) alts $ argOffset 1 env]
 compileR d (ECaseConstr expr alts) env =
