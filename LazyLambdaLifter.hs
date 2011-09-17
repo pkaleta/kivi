@@ -5,9 +5,9 @@ import Common
 import LambdaLifter
 import NameSupply
 import Utils
-import Data.Map as Map
-import Data.Set as Set
-import Data.List as List
+import Data.Map as Map hiding (map)
+import Data.Set as Set hiding (map)
+import Data.List as List hiding (map)
 import Debug.Trace
 
 
@@ -17,7 +17,12 @@ type Level = Int
 
 lazyLambdaLift :: CoreProgram -> CoreProgram
 lazyLambdaLift (adts, scs) =
-    (adts, float . mergeLambdas . renameL . identifyMFEs . annotateLevels . separateLambdas $ scs)
+    (adts, float
+         . mergeLambdas
+         . renameL
+         . identifyMFEs
+         . annotateLevels
+         . separateLambdas $ scs)
 
 
 separateLambdas :: [CoreScDefn] -> [CoreScDefn]
@@ -37,7 +42,7 @@ separateLambdasExpr (ELam args body) =
     mkSepArgs args body'
     where body' = separateLambdasExpr body
 separateLambdasExpr (ELet isRec defns body) =
-    ELet isRec (List.map mkDefn defns) (separateLambdasExpr body)
+    ELet isRec (map mkDefn defns) (separateLambdasExpr body)
     where
         mkDefn (name, expr) = (name, separateLambdasExpr expr)
 separateLambdasExpr (ESelect r i v) = ESelect r i v
@@ -46,7 +51,7 @@ separateLambdasExpr (EError msg) = EError msg
 
 separateLambdasExprCase :: (CoreExpr -> [CoreAlt] -> CoreExpr) -> CoreExpr -> [CoreAlt] -> CoreExpr
 separateLambdasExprCase constr expr alts =
-    constr (separateLambdasExpr expr) $ List.map mkAlt alts
+    constr (separateLambdasExpr expr) $ map mkAlt alts
     where
         mkAlt (t, expr) = (t, separateLambdasExpr expr)
 
@@ -96,7 +101,7 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
         expr'@(exprLevel, _) = freeToLevelExpr level exprEnv expr
         defns' = zip binders' rhss'
 
-        rhssFreeVars = foldl collectFreeVars Set.empty rhss
+        rhssFreeVars = Set.unions $ map fst rhss
         maxRhsLevel = freeSetToLevel rhssLevelEnv rhssFreeVars
 
         exprEnv = Map.union (Map.fromList binders') env
@@ -106,10 +111,6 @@ freeToLevelExpr level env (free, ALet isRec defns expr) =
 
         rhssLevelEnv | isRec = Map.union (Map.fromList [(name, 0) | name <- binders]) env
                      | otherwise = env
-
-        -- helper function to collect free variables from right had side
-        -- expressions in definitions
-        collectFreeVars freeVars (free, rhs) = Set.union freeVars free
 freeToLevelExpr level env (free, ACaseSimple expr alts) =
     freeToLevelExprCase ACaseSimple level env free expr alts
 freeToLevelExpr level env (free, ACaseConstr expr alts) =
@@ -134,7 +135,7 @@ freeToLevelExprCase constr level env free expr alts =
     (freeSetToLevel env free, constr expr' alts')
     where
         expr'@(exprLevel, _) = freeToLevelExpr level env expr
-        alts' = List.map mapAlt alts
+        alts' = map mapAlt alts
 
         mapAlt (tag, altExpr) =
             (tag, altExpr')
@@ -144,7 +145,7 @@ freeToLevelExprCase constr level env free expr alts =
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
 freeSetToLevel env free =
-    foldl max 0 $ [ case Map.lookup var env of
+    maximum [ case Map.lookup var env of
         Just level -> level
         Nothing -> 0 | var <- (Set.toList free)]
 
@@ -211,8 +212,8 @@ newNamesL :: NameSupply -> [(Name, Level)] -> (NameSupply, [(Name, Level)], Map 
 newNamesL ns names =
     (ns', names2, mapping)
     where
-        names0 = List.map fst names
-        levels = List.map snd names
+        names0 = map fst names
+        levels = map snd names
         (ns', names1) = getNames ns names0
         names2 = zip names1 levels
         mapping = Map.fromList $ zip names0 names1
@@ -261,7 +262,7 @@ floatExpr (EAp e1 e2) = (fds1 ++ fds2, EAp e1' e2')
 floatExpr (ELam args expr) = (outerFds, ELam args' $ wrap innerFds expr')
     where
         args' = [arg | (arg, level) <- args]
-        (arg, curLevel) = head args
+        (_, curLevel) = head args
         (fdBody, expr') = floatExpr expr
         (innerFds, outerFds) = List.partition checkLevel fdBody
 
