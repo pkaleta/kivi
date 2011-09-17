@@ -117,9 +117,9 @@ genLLVMIR :: String -> IO (LLVMIR)
 genLLVMIR program = do
     templates <- directoryGroup templatesPath :: IO (STGroup String)
     return $ (genProgramLLVMIR templates)
+        . analyseDeps
         . lambdaLift
         . lazyLambdaLift
-        . analyseDeps
         . transformToLambdaCalculus
         . mergePatterns
         . tag

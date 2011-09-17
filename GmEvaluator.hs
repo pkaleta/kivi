@@ -20,9 +20,9 @@ import Data.Char
 
 --runTest :: String -> CoreProgram
 runTest = typeCheck
+        . analyseDeps
         . lambdaLift
         . lazyLambdaLift
-        . analyseDeps
         . transformToLambdaCalculus
         . mergePatterns
         . tag
@@ -32,9 +32,9 @@ run :: String -> String
 run = showResults
     . eval
     . compile
+    . analyseDeps
     . lambdaLift
     . lazyLambdaLift
-    . analyseDeps
     . transformToLambdaCalculus
     . mergePatterns
     . tag

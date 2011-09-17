@@ -145,9 +145,11 @@ freeToLevelExprCase constr level env free expr alts =
 
 freeSetToLevel :: Map Name Level -> Set Name -> Level
 freeSetToLevel env free =
-    maximum [ case Map.lookup var env of
-        Just level -> level
-        Nothing -> 0 | var <- (Set.toList free)]
+    case Set.null free of
+        True -> 0
+        False -> maximum [ case Map.lookup var env of
+                    Just level -> level
+                    Nothing -> 0 | var <- (Set.toList free)]
 
 
 identifyMFEs :: AnnProgram (Name, Level) Level -> [ScDefn (Name, Level)]
