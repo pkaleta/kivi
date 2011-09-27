@@ -51,7 +51,7 @@ data TypedExpr' a = TVar Name
 
 type TypedDefn a = (a, TypedExpr a)
 type TypedAlt a = (Int, TypedExpr a)
-data TypedScDefn a = TypedScDefn Name [TypeExpr] (TypedExpr a)
+data TypedScDefn a = TypedScDefn Name [TypedExpr a] (TypedExpr a)
     deriving Show
 type TypedProgram a = ([DataType], [TypedScDefn a])
 
@@ -101,11 +101,11 @@ list t = TypeOp "list" [t]
 
 updateInstances :: State -> [TypedScDefn Name] -> [TypedScDefn Name]
 updateInstances state scs =
-    [TypedScDefn name (updateArgs state args) $ updateExpr state expr | (TypedScDefn name args expr) <- scs]
+    trace ("************" ++ show state ++ "\n\n") $ [TypedScDefn name (updateArgs state args) $ updateExpr state expr | (TypedScDefn name args expr) <- scs]
 
 
-updateArgs :: State -> [TypeExpr] -> [TypeExpr]
-updateArgs state = map (updateType state)
+updateArgs :: State -> [TypedExpr Name] -> [TypedExpr Name]
+updateArgs state args = [(updateType state typeExpr, expr) | (typeExpr, expr) <- args]
 
 
 updateType :: State -> TypeExpr -> TypeExpr
@@ -157,17 +157,26 @@ typeCheck (adts, scs) =
 
 typeCheckSc :: NonGeneric -> (State, TypeEnv) -> CoreScDefn -> ((State, TypeEnv), TypedScDefn Name)
 typeCheckSc nonGeneric (state, env) (ScDefn name args expr) =
-  ((state2, env1), TypedScDefn name args' expr')
+  ((state3, env1), TypedScDefn name args' expr')
   where
-    ((state0, env0), args') = mapAccumL createTypeVar (state, env) args
-    (state1, tv) = newTypeVariable state0
-    env1 = Map.insert name tv env0
+    -- create a type variable to hold the type of supercombinator
+    (state0, tv) = newTypeVariable state
+    env0 = Map.insert name tv env
+    
+    -- create type variables for supercombinator arguments
+    ((state1, env1), args') = mapAccumL createTypeVar (state0, env0) args
+    
+    -- type check supercombinator body
     (state2, expr'@(te, _)) = typeCheckExpr state1 env1 nonGeneric expr
-    (state3, _, _) = unify state2 tv te
+    
+    -- unify type for supercombinator
+    argTypeVars = map fst args'
+    scType = foldr arrow te argTypeVars
+    (state3, _, _) = trace ("unify supercombinator" ++ name) $ unify state2 tv scType
 
 
-createTypeVar :: (State, TypeEnv) -> Name -> ((State, TypeEnv), TypeExpr)
-createTypeVar (state, env) name = ((state', env'), tv)
+createTypeVar :: (State, TypeEnv) -> Name -> ((State, TypeEnv), TypedExpr Name)
+createTypeVar (state, env) name = ((state', env'), (tv, TVar name))
     where
         (state', tv) = newTypeVariable state
         env' = Map.insert name tv env
@@ -175,7 +184,7 @@ createTypeVar (state, env) name = ((state', env'), tv)
 
 typeCheckExpr :: State -> TypeEnv -> NonGeneric -> CoreExpr -> (State, TypedExpr Name)
 typeCheckExpr state env nonGeneric (EVar v) = (state', (typeExpr, TVar v))
-    where (state', typeExpr) = getType state env nonGeneric v
+    where (state', typeExpr) = trace ("############ " ++ v ++ " " ++ " " ++ show env ++ " ********* " ++ show state) getType state env nonGeneric v
 typeCheckExpr state env nonGeneric (ENum n) = (state, (int, TNum n))
 typeCheckExpr state env nonGeneric (EChar c) = (state, (char, TChar c))
 typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2'))
@@ -184,21 +193,35 @@ typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2')
         (state2, e2'@(argType, _)) = typeCheckExpr state1 env nonGeneric e2
         (state3, resType) = newTypeVariable state2
 
-        (state4, _, _) = unify state3 (argType `arrow` resType) funType
+        (state4, _, _) = trace ("unify application: " ++ show funType ++ " " ++ show e1 ++ "\n\n" ++ show argType ++ " " ++ show e2 ++ "\n\n") $ unify state3 (argType `arrow` resType) funType
 typeCheckExpr state env nonGeneric expr@(ELet False defns body) =
     typeCheckLet state env nonGeneric defns body
 typeCheckExpr state env nonGeneric expr@(ELet True defns body) =
     typeCheckLetrec state env nonGeneric defns body
 typeCheckExpr state env nonGeneric (ECaseConstr expr alts) =
-  (state3, (firstAltType, TCaseConstr expr' alts'))
+  typeCheckCase state env nonGeneric TCaseConstr expr alts
+typeCheckExpr state env nonGeneric (ECaseSimple expr alts) =
+  typeCheckCase state env nonGeneric TCaseSimple expr alts
+typeCheckExpr state env nonGeneric constr@(EConstr _ _) = typeCheckConstr state env nonGeneric constr
+--typeCheckExpr state env nonGeneric (ESelect r i) = 
+typeCheckExpr state _ _ expr = error $ "typeCheckExpr: " ++ show expr
+
+
+typeCheckCase :: State ->
+                 TypeEnv ->
+                 NonGeneric ->
+                 (TypedExpr Name -> [TypedAlt Name] -> TypedExpr' Name) ->
+                 CoreExpr ->
+                 [CoreAlt] ->
+                 (State, TypedExpr Name)
+typeCheckCase state env nonGeneric constr expr alts =
+  (state3, (firstAltType, constr expr' alts'))
   where
     (_, firstAltExpr) = head alts
     (state1, (firstAltType, _)) = typeCheckExpr state env nonGeneric firstAltExpr
     ((state2, _), alts') = mapAccumL (typeCheckAlt nonGeneric env) (state1, firstAltType) alts
     (state3, expr') = typeCheckExpr state2 env nonGeneric expr
-typeCheckExpr state env nonGeneric constr@(EConstr _ _) = typeCheckConstr state env nonGeneric constr
---typeCheckExpr state env nonGeneric (ESelect r i) = 
-typeCheckExpr state _ _ expr = error $ "typeCheckExpr: " ++ show expr
+
 
 
 typeCheckConstr :: State -> TypeEnv -> NonGeneric -> CoreExpr -> (State, TypedExpr Name)
@@ -247,24 +270,26 @@ typeCheckRecDefn nonGeneric (state, env) (v, defn) = ((state2, env), (v, typedDe
        (state1, typedDefn@(defnType, defn')) = typeCheckExpr state env nonGeneric defn
 
        (Just varType) = Map.lookup v env
-       (state2, _, _) = unify state1 varType defnType
+       (state2, _, _) = trace "unify recursive defn" unify state1 varType defnType
 
 
 typeCheckAlt :: NonGeneric -> TypeEnv -> (State, TypeExpr) -> CoreAlt -> ((State, TypeExpr), TypedAlt Name)
-typeCheckAlt nonGeneric env (state, accType) (v, expr) = ((state2, accType), (v, typedAlt))
-   where
-       (state1, typedAlt@(altType, expr')) = typeCheckExpr state env nonGeneric expr
-       (state2, _, _) = unify state1 accType altType
+typeCheckAlt nonGeneric env (state, accType) (v, expr) =
+  ((state2, accType), (v, typedAlt))
+  where
+    (state1, typedAlt@(altType, expr')) = typeCheckExpr state env nonGeneric expr
+    (state2, _, _) = trace "unify alt" unify state1 accType altType
 
 
 getType :: State -> TypeEnv -> NonGeneric -> Name -> (State, TypeExpr)
 getType state env nonGeneric v =
-    case Map.lookup v env of
-        (Just te) -> (state', te')
-            where
-                (state', te') = fresh state nonGeneric te
-        Nothing ->
-            error $ "Undefined symbol: " ++ v
+  case Map.lookup v env of
+    (Just te) -> trace ("####################### " ++ show v ++ " " ++ show te ++ " " ++ show te' ++ " ----" ++ show state ++ "\n\n") $ (state', te)
+      where
+        (state', te') = fresh state nonGeneric te
+--        (state1, _, _) = trace "unify gettype" unify state' te te'
+    Nothing ->
+      error $ "Undefined symbol: " ++ v
 
 
 fresh :: State -> NonGeneric -> TypeExpr -> (State, TypeExpr)
@@ -282,18 +307,19 @@ fresh' nonGeneric (state, env) te = freshType nonGeneric (state0, env) te0
 
 freshType :: NonGeneric -> (State, TypeEnv) -> TypeExpr -> ((State, TypeEnv), TypeExpr)
 freshType nonGeneric (state, env) tv@(TypeVar name Nothing) =
-    case isGeneric nonGeneric name of
-        True  ->
-            case Map.lookup name env of
-                (Just tv') -> ((state, env), tv')
-                Nothing    -> ((state', env'), tv')
-                    where
-                        (state', tv') = newTypeVariable state
-                        env' = Map.insert name tv' env
-        False -> ((state, env), tv)
-freshType nonGeneric (state, env) (TypeOp name args) = ((state', env'), TypeOp name args')
-    where
-        ((state', env'), args') = mapAccumL (fresh' nonGeneric) (state, env) args
+  case isGeneric nonGeneric name of
+    True  ->
+      case Map.lookup name env of
+        (Just tv') -> ((state, env), tv')
+        Nothing    -> ((state', env'), tv')
+          where
+            (state', tv') = newTypeVariable state
+            env' = Map.insert name tv' env
+    False -> ((state, env), tv)
+freshType nonGeneric (state, env) (TypeOp name args) =
+  ((state', env'), TypeOp name args')
+  where
+    ((state', env'), args') = mapAccumL (fresh' nonGeneric) (state, env) args
 
 
 isGeneric :: NonGeneric -> TypeVarName -> Bool
@@ -319,7 +345,7 @@ prune state te = (state, te)
 
 
 unify :: State -> TypeExpr -> TypeExpr -> (State, TypeExpr, TypeExpr)
-unify state te1 te2 = unify' state2 te1' te2'
+unify state te1 te2 = trace ("unify: " ++ show te1' ++ " " ++ show te2') $ unify' state2 te1' te2'
     where
         (state1, te1') = prune state te1
         (state2, te2') = prune state1 te2
@@ -329,20 +355,20 @@ unify' :: State -> TypeExpr -> TypeExpr -> (State, TypeExpr, TypeExpr)
 unify' state tv@(TypeVar name Nothing) te =
     case occurs of
         True -> error "Recursive unification"
-        False -> (state2, tv, te)
+        False -> trace ("******** " ++ name ++ " " ++ show state2 ++ "\n") (state2, tv, te)
             where
                 state2 = state1 { typeInstanceEnv = Map.insert name te $ typeInstanceEnv state1 }
     where
         (state1, occurs) = occursInType state tv te
 unify' state to@(TypeOp ton args) tv@(TypeVar name Nothing) = unify' state tv to
 unify' state to1@(TypeOp n1 as1) to2@(TypeOp n2 as2) =
-    case n1 /= n2 || length as1 /= length as2 of
+    trace ("jestem " ++ show n1 ++ " " ++ show n2) $ case n1 /= n2 || length as1 /= length as2 of
         True ->
             error $ "Type mismatch: " ++ showTypeExprDbg state to1 ++ " and " ++ showTypeExprDbg state to2
         False ->
             (state', TypeOp n1 a1', TypeOp n2 a2')
             where
-                (state', a1', a2') = foldl unifyArgs (state, [], []) $ zip as1 as2
+                (state', a1', a2') = foldl' unifyArgs (state, [], []) $ zip as1 as2
 
 
 unifyArgs :: (State, [TypeExpr], [TypeExpr])
@@ -397,7 +423,7 @@ initialTypeEnv =
                  ("-", binaryArithOp),
                  ("*", binaryArithOp),
                  ("/", binaryArithOp),
-                 ("if", bool `arrow` (v1 `arrow` v2)),
+                 ("if", bool `arrow` (v1 `arrow` (v2 `arrow` v3))),
                  ("==", binaryLogicalOp),
                  ("<=", binaryLogicalOp),
                  (">=", binaryLogicalOp),
@@ -406,6 +432,7 @@ initialTypeEnv =
   where
     (state1, v1) = newTypeVariable initialState
     (state2, v2) = newTypeVariable state1
+    (state3, v3) = newTypeVariable state2
 
 
 
