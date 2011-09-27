@@ -36,6 +36,7 @@ type TypedExpr a = (TypeExpr, TypedExpr' a)
 
 data TypedExpr' a = TVar Name
                   | TNum Int
+                  | TChar Int
                   | TConstr Int Int
                   | TAp (TypedExpr a) (TypedExpr a)
                   | TLet IsRec [TypedDefn a] (TypedExpr a)
@@ -117,6 +118,7 @@ updateType state (TypeOp name args) = TypeOp name $ map (updateType state) args
 
 updateExpr :: State -> TypedExpr Name -> TypedExpr Name
 updateExpr state (te, TVar v) = (updateType state te, TVar v)
+updateExpr state (te, TChar c) = (updateType state te, TChar c)
 updateExpr state (te, TNum n) = (updateType state te, TNum n)
 updateExpr state (te, TAp e1 e2) = (updateType state te, TAp e1' e2')
     where
@@ -171,6 +173,7 @@ typeCheckExpr :: State -> TypeEnv -> NonGeneric -> CoreExpr -> (State, TypedExpr
 typeCheckExpr state env nonGeneric (EVar v) = (state', (typeExpr, TVar v))
     where (state', typeExpr) = getType state env nonGeneric v
 typeCheckExpr state env nonGeneric (ENum n) = (state, (int, TNum n))
+typeCheckExpr state env nonGeneric (EChar c) = (state, (char, TChar c))
 typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2'))
     where
         (state1, e1'@(funType, _)) = typeCheckExpr state env nonGeneric e1
