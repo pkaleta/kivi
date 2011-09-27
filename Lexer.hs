@@ -5,7 +5,7 @@ import Char
 type Token = String
 type TokenInfo = (Int, Token)
 
-twoCharOps = ["==", "~=", ">=", "<=", "->"]
+twoCharOps = ["==", "~=", ">=", "<=", "->", "++"]
 
 -- lexer implementation
 lex :: String -> [Token]

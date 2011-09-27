@@ -149,17 +149,21 @@ updateCase state constr expr alts = constr expr' alts'
 
 
 typeCheck :: CoreProgram -> TypedProgram Name
-typeCheck (adts, scs) = (adts, updateInstances state scs')
-    where ((state, _), scs') = mapAccumL (typeCheckSc initialNonGeneric) (initialState, initialTypeEnv) scs
+typeCheck (adts, scs) =
+  (adts, updateInstances state1 scs')
+  where
+    ((state1, _), scs') = mapAccumL (typeCheckSc initialNonGeneric) initialTypeEnv scs
 
 
 typeCheckSc :: NonGeneric -> (State, TypeEnv) -> CoreScDefn -> ((State, TypeEnv), TypedScDefn Name)
-typeCheckSc nonGeneric (state, env) (ScDefn name args expr) = ((state2, env1), TypedScDefn name args' expr')
-    where
-        ((state0, env0), args') = mapAccumL createTypeVar (state, env) args
-        (state1, tv) = newTypeVariable state0
-        (state2, expr'@(te, _)) = typeCheckExpr state1 env0 nonGeneric expr
-        env1 = Map.insert name te env
+typeCheckSc nonGeneric (state, env) (ScDefn name args expr) =
+  ((state2, env1), TypedScDefn name args' expr')
+  where
+    ((state0, env0), args') = mapAccumL createTypeVar (state, env) args
+    (state1, tv) = newTypeVariable state0
+    env1 = Map.insert name tv env0
+    (state2, expr'@(te, _)) = typeCheckExpr state1 env1 nonGeneric expr
+    (state3, _, _) = unify state2 tv te
 
 
 createTypeVar :: (State, TypeEnv) -> Name -> ((State, TypeEnv), TypeExpr)
@@ -183,7 +187,17 @@ typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2')
         (state4, _, _) = unify state3 (argType `arrow` resType) funType
 typeCheckExpr state env nonGeneric expr@(ELet False defns body) =
     typeCheckLet state env nonGeneric defns body
+typeCheckExpr state env nonGeneric expr@(ELet True defns body) =
+    typeCheckLetrec state env nonGeneric defns body
+typeCheckExpr state env nonGeneric (ECaseConstr expr alts) =
+  (state3, (firstAltType, TCaseConstr expr' alts'))
+  where
+    (_, firstAltExpr) = head alts
+    (state1, (firstAltType, _)) = typeCheckExpr state env nonGeneric firstAltExpr
+    ((state2, _), alts') = mapAccumL (typeCheckAlt nonGeneric env) (state1, firstAltType) alts
+    (state3, expr') = typeCheckExpr state2 env nonGeneric expr
 typeCheckExpr state env nonGeneric constr@(EConstr _ _) = typeCheckConstr state env nonGeneric constr
+--typeCheckExpr state env nonGeneric (ESelect r i) = 
 typeCheckExpr state _ _ expr = error $ "typeCheckExpr: " ++ show expr
 
 
@@ -213,36 +227,34 @@ typeCheckDefn nonGeneric (state, env) (v, defn) = ((state', env'), (v, typedDefn
         env' = Map.insert v defnType env
 
 
---typeCheckLetrec :: State -> TypeEnv -> NonGeneric -> CoreDefns -> CoreExpr -> (State, TypedExpr Name)
---typeCheckLetrec state env nonGeneric defns expr = (state3, (exprType, TLet True defns' typedExpr))
---    where
---        state1 = foldl collectDefn state defns
---        (state2, defns') = mapAccumL typeCheckRecDefn state1 defns
---        (state3, typedExpr@(exprType, expr')) = typeCheckExpr state2 expr
---
---        collectDefn state (v, defn) = state3
---            where
---                (state1, tv@(TypeVar tvn Nothing)) = newTypeVariable state
---                state2 = state1 { typeEnv = Map.insert v tv $ typeEnv state1 }
---                state3 = state2 { nonGeneric = Set.insert tvn $ nonGeneric state2 }
+typeCheckLetrec :: State -> TypeEnv -> NonGeneric -> [CoreDefn] -> CoreExpr -> (State, TypedExpr Name)
+typeCheckLetrec state env nonGeneric defns expr = (state3, (exprType, TLet True defns' typedExpr))
+   where
+       (env1, nonGeneric', state1) = foldl collectDefn (env, nonGeneric, state) defns
+       ((state2, env2), defns') = mapAccumL (typeCheckRecDefn nonGeneric') (state1, env1) defns
+       (state3, typedExpr@(exprType, expr')) = typeCheckExpr state2 env2 nonGeneric' expr
+
+       collectDefn (env, nonGeneric, state) (v, defn) = (env', nonGeneric', state')
+           where
+               (state', tv@(TypeVar name Nothing)) = newTypeVariable state
+               nonGeneric' = Set.insert name nonGeneric
+               env' = Map.insert v tv env
 
 
---typeCheckRecDefn :: State -> CoreDefn -> (State, TypedDefn Name)
---typeCheckRecDefn state (v, defn) = (state3, (v, typedDefn))
---    where
---        (state1, typedDefn@(defnType, defn')) = typeCheckExpr state defn
---
---        (Just varType) = Map.lookup v $ typeEnv state1
---        (state2, varType', defnType') = unify state1 varType defnType
---
---        state3 = state2 { typeEnv = Map.insert v varType' $ typeEnv state2 }
+typeCheckRecDefn :: NonGeneric -> (State, TypeEnv) -> CoreDefn -> ((State, TypeEnv), TypedDefn Name)
+typeCheckRecDefn nonGeneric (state, env) (v, defn) = ((state2, env), (v, typedDefn))
+   where
+       (state1, typedDefn@(defnType, defn')) = typeCheckExpr state env nonGeneric defn
+
+       (Just varType) = Map.lookup v env
+       (state2, _, _) = unify state1 varType defnType
 
 
---typeCheckAlt :: (State, TypeExpr) -> CoreAlt -> ((State, TypeExpr), TypedAlt Name)
---typeCheckAlt (state, accType) (v, expr) = ((state2, accType), (v, typedAlt))
---    where
---        (state1, typedAlt@(altType, expr')) = typeCheckExpr state expr
---        (state2, _, _) = unify state1 accType altType
+typeCheckAlt :: NonGeneric -> TypeEnv -> (State, TypeExpr) -> CoreAlt -> ((State, TypeExpr), TypedAlt Name)
+typeCheckAlt nonGeneric env (state, accType) (v, expr) = ((state2, accType), (v, typedAlt))
+   where
+       (state1, typedAlt@(altType, expr')) = typeCheckExpr state env nonGeneric expr
+       (state2, _, _) = unify state1 accType altType
 
 
 getType :: State -> TypeEnv -> NonGeneric -> Name -> (State, TypeExpr)
@@ -256,8 +268,11 @@ getType state env nonGeneric v =
 
 
 fresh :: State -> NonGeneric -> TypeExpr -> (State, TypeExpr)
-fresh state nonGeneric te = (state', te')
-    where ((state', _), te') = fresh' nonGeneric (state, initialTypeEnv) te
+fresh state nonGeneric te =
+  (state', te')
+  where
+    (_, env) = initialTypeEnv
+    ((state', _), te') = fresh' nonGeneric (state, env) te
 
 
 fresh' :: NonGeneric -> (State, TypeEnv) -> TypeExpr -> ((State, TypeEnv), TypeExpr)
@@ -363,21 +378,37 @@ binaryArithOp :: TypeExpr
 binaryArithOp = int `arrow` (int `arrow` int)
 
 
+binaryLogicalOp :: TypeExpr
+binaryLogicalOp = int `arrow` (int `arrow` bool)
+
+
 initialTypeInstanceEnv :: TypeInstanceEnv
 initialTypeInstanceEnv = Map.empty
 
 
-initialTypeEnv :: TypeEnv
-initialTypeEnv = Map.fromList [("+", binaryArithOp),
-                               ("-", binaryArithOp),
-                               ("*", binaryArithOp),
-                               ("/", binaryArithOp)]
+initialState :: State
+initialState = State initialNameSupply initialTypeInstanceEnv
+
+
+initialTypeEnv :: (State, TypeEnv)
+initialTypeEnv =
+  (state2,
+   Map.fromList [("+", binaryArithOp),
+                 ("-", binaryArithOp),
+                 ("*", binaryArithOp),
+                 ("/", binaryArithOp),
+                 ("if", bool `arrow` (v1 `arrow` v2)),
+                 ("==", binaryLogicalOp),
+                 ("<=", binaryLogicalOp),
+                 (">=", binaryLogicalOp),
+                 (">", binaryLogicalOp),
+                 ("<", binaryLogicalOp)])
+  where
+    (state1, v1) = newTypeVariable initialState
+    (state2, v2) = newTypeVariable state1
+
 
 
 initialNonGeneric :: NonGeneric
 initialNonGeneric = Set.empty
-
-
-initialState :: State
-initialState = State initialNameSupply initialTypeInstanceEnv
 

@@ -331,9 +331,11 @@ pAddExpr = pThen assembleOp pMultExpr pAddExprC
 
 
 pAddExprC :: Parser PartialExpr
-pAddExprC = (pThen FoundOp (pLit "+") pAddExpr) `pOr`
-    (pThen FoundOp (pLit "-") pMultExpr) `pOr`
-    (pEmpty NoOp)
+pAddExprC = 
+  (pThen FoundOp (pLit "++") pAddExpr) `pOr`
+  (pThen FoundOp (pLit "+") pAddExpr) `pOr`
+  (pThen FoundOp (pLit "-") pMultExpr) `pOr`
+  (pEmpty NoOp)
 
 
 -- multiplicative expression
