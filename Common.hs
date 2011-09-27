@@ -207,6 +207,7 @@ showExpr' :: Show a => Int -> Expr a -> String
 showExpr' indent (EVar v) = v
 showExpr' indent (ENum n) = show n
 showExpr' indent (EChar c) = show . chr $ c
+showExpr' indent (EConstrName name) = name
 --TODO: retrieve the name of constructor
 showExpr' indent (EConstr t a) = "CONSTR" ++ show t
 showExpr' indent (EAp e1 e2) = "(" ++ showExpr' indent e1 ++ " " ++ showExpr' indent e2 ++ ")"

@@ -140,13 +140,26 @@ syntax = takeFirstParse . pProgram
         takeFirstParse _ = error "Syntax error: no successful parse found."
 
 
+pStringContent :: Parser String
+pStringContent (t : ts) = [(t, ts)]
+
+
+pString :: Parser (Expr Pattern)
+pString =
+  pThen3 mkString (pLit "\"") pStringContent (pLit "\"")
+  where
+    mkString _ content _ = foldr cons (EConstrName "Nil") content
+    cons c acc = EAp (EAp (EConstrName "Cons") (EChar $ ord c)) acc
+
+
 pList :: Parser (Expr Pattern)
 pList =
     pThen3 mkList (pLit "[") (pZeroOrMoreWithSep pExpr (pLit ",")) (pLit "]") `pOr`
+    pString `pOr`
     pThen3 selSecond (pLit "(") pConsList (pLit ")")
     where
-        mkList _ exprs _ = foldr cons (EConstrName "Nil") exprs
         selSecond _ list _ = list
+        mkList _ exprs _ = foldr cons (EConstrName "Nil") exprs
 
 
 pConsList :: Parser (Expr Pattern)
