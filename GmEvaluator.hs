@@ -16,6 +16,7 @@ import DependencyAnalyser
 import LambdaCalculusTransformer
 import TypeChecker
 import Data.Char
+import Gc
 
 
 --runTest :: String -> CoreProgram
@@ -49,6 +50,9 @@ eval state = state : restStates
         restStates | gmFinal state = []
                    | otherwise = eval nextState
         nextState = doAdmin $ step state
+        state' = case gmstats state `rem` 100 == 0 of
+          True -> gc state
+          False -> state
 
 doAdmin :: GmState -> GmState
 doAdmin state = state { gmstats = statIncSteps $ gmstats state }

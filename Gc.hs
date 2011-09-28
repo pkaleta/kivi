@@ -4,10 +4,10 @@ import Common
 import Utils
 
 gc :: GmState -> GmState
-gc state = putHeap heap' state
+gc state = state { gmheap = heap' }
     where
         heap' = scanHeap $ foldl markFrom heap $ findRoots state
-        heap = getHeap state
+        heap = gmheap state
 
 markFrom :: GmHeap -> Addr -> GmHeap
 markFrom heap addr =
@@ -20,7 +20,7 @@ markFrom heap addr =
         NGlobal arity code -> heap0
         NNum n -> heap0
         NChar c -> heap0
-        NInd addr -> heap0
+        NInd addr -> heap1
             where
                 heap1 = markFrom heap0 addr
         NConstr tag args -> heap1
@@ -45,9 +45,9 @@ scanHeap heap =
                 node = hLookup heap addr
 
 findRoots state =
-    findStackRoots (getStack state) ++
-    findDumpRoots (getDump state) ++
-    findGlobalRoots (getGlobals state)
+    findStackRoots (gmstack state) ++
+    findDumpRoots (gmdump state) ++
+    findGlobalRoots (gmglobals state)
 
 findStackRoots :: GmStack -> [Addr]
 findStackRoots stack = stack
