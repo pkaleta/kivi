@@ -44,7 +44,7 @@ data TypedExpr' a = TVar Name
                   | TCaseSimple (TypedExpr a) [TypedAlt a]
                   | TCaseConstr (TypedExpr a) [TypedAlt a]
                   | TLam [a] (TypedExpr a)
-                  | TSelect Int Int a
+                  | TSelect Int Int Name
                   | TError String
     deriving Show
 
@@ -130,6 +130,7 @@ updateExpr state (te, TLet isRec defns expr) = (updateType state te, TLet isRec 
         expr' = updateExpr state expr
 updateExpr state (te, TCaseSimple expr alts) = (updateType state te, updateCase state TCaseSimple expr alts)
 updateExpr state (te, TCaseConstr expr alts) = (updateType state te, updateCase state TCaseConstr expr alts)
+updateExpr state (te, expr@(TSelect r i name)) = (updateType state te, expr)
 updateExpr state (te, TLam args expr) = (updateType state te, TLam args expr')
     where
         expr' = updateExpr state expr
@@ -203,7 +204,10 @@ typeCheckExpr state env nonGeneric (ECaseConstr expr alts) =
 typeCheckExpr state env nonGeneric (ECaseSimple expr alts) =
   typeCheckCase state env nonGeneric TCaseSimple expr alts
 typeCheckExpr state env nonGeneric constr@(EConstr _ _) = typeCheckConstr state env nonGeneric constr
---typeCheckExpr state env nonGeneric (ESelect r i) = 
+typeCheckExpr state env nonGeneric (ESelect r i name) =
+  (state', (typeExpr, TSelect r i name))
+  where
+    (state', typeExpr) = newTypeVariable state
 typeCheckExpr state _ _ expr = error $ "typeCheckExpr: " ++ show expr
 
 

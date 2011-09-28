@@ -4,6 +4,7 @@ module Common where
 import Utils
 import Data.String.Utils
 import Data.Char
+import Text.Printf
 
 
 -- Parser
@@ -57,14 +58,17 @@ data Pattern = PNum Int
 
 
 -- GmEvaluator
-type GmState = (GmOutput,
-                GmCode,
-                GmStack,
-                GmDump,
-                GmVStack,
-                GmHeap,
-                GmGlobals,
-                GmStats)
+data GmState = GmState { gmoutput :: GmOutput,
+                         gmcode :: GmCode,
+                         gmstack :: GmStack,
+                         gmdump :: GmDump,
+                         gmvstack :: GmVStack,
+                         gmheap :: GmHeap,
+                         gmglobals :: GmGlobals,
+                         gmstats :: GmStats }
+               
+instance Show GmState where
+  show = showGmState
 
 type GmVStack = [Int]
 
@@ -129,6 +133,7 @@ data Node = NNum Int            -- numbers
           | NConstr Int [Addr]  -- constructor nodes
           | NMarked Node
     deriving Show
+
 instance Eq Node
     where
         NNum a == NNum b = a == b
@@ -141,53 +146,6 @@ type GmGlobals = Assoc Name Addr
 
 type GmStats = Int
 
-getOutput :: GmState -> GmOutput
-getOutput (output, code, stack, dump, vstack, heap, globals, stats) = output
-
-putOutput :: GmOutput -> GmState -> GmState
-putOutput output' (output, code, stack, dump, vstack, heap, globals, stats) = (output', code, stack, dump, vstack, heap, globals, stats)
-
-getCode :: GmState -> GmCode
-getCode (output, code, stack, dump, vstack, heap, globals, stats) = code
-
-putCode :: GmCode -> GmState -> GmState
-putCode code' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code', stack, dump, vstack, heap, globals, stats)
-
-getStack :: GmState -> GmStack
-getStack (output, code, stack, dump, vstack, heap, globals, stats) = stack
-
-putStack :: GmStack -> GmState -> GmState
-putStack stack' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code, stack', dump, vstack, heap, globals, stats)
-
-getDump :: GmState -> GmDump
-getDump (output, code, stack, dump, vstack, heap, globals, stats) = dump
-
-putDump :: GmDump -> GmState -> GmState
-putDump dump' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code, stack, dump', vstack, heap, globals, stats)
-
-getVStack:: GmState -> GmVStack
-getVStack (output, code, stack, dump, vstack, heap, globals, stats) = vstack
-
-putVStack :: GmVStack-> GmState -> GmState
-putVStack vstack' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code, stack, dump, vstack', heap, globals, stats)
-
-getHeap :: GmState -> GmHeap
-getHeap (output, code, stack, dump, vstack, heap, globals, stats) = heap
-
-putHeap :: GmHeap -> GmState -> GmState
-putHeap heap' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code, stack, dump, vstack, heap', globals, stats)
-
-getGlobals :: GmState -> GmGlobals
-getGlobals (output, code, stack, dump, vstack, heap, globals, stats) = globals
-
-putGlobals :: GmGlobals -> GmState -> GmState
-putGlobals globals' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code, stack, dump, vstack, heap, globals', stats)
-
-getStats :: GmState -> GmStats
-getStats (output, code, stack, dump, vstack, heap, globals, stats) = stats
-
-putStats :: GmStats -> GmState -> GmState
-putStats stats' (output, code, stack, dump, vstack, heap, globals, stats) = (output, code, stack, dump, vstack, heap, globals, stats')
 
 initialStats :: GmStats
 initialStats = 0
@@ -254,4 +212,50 @@ getIndent n = join "" [defaultIndent | i <- [0..n-1]]
 showScDefn :: Show a => ScDefn a -> String
 showScDefn (ScDefn name args expr) =
     "\n\n********* " ++ name ++ "(" ++ join "," [show arg | arg <- args] ++ ") *********\n" ++ show expr ++ "\n\n"
+    
+
+makeStr :: GmHeap -> Node -> String
+makeStr heap (NNum n) = show n
+makeStr heap (NChar c) = show . chr $ c
+makeStr heap (NAp a1 a2) = "(" ++ makeStr heap n1 ++ " " ++ makeStr heap n2 ++ ")"
+    where
+        n1 = hLookup heap a1
+        n2 = hLookup heap a2
+makeStr heap (NGlobal addr code) = "<fun " ++ show addr ++ ">"
+makeStr heap (NInd addr) =
+    case addr == hNull of
+        True -> "NULL"
+        False -> makeStr heap $ hLookup heap addr
+makeStr heap (NConstr tag as) = "CONSTR " ++ show tag
+
+
+showGmState :: GmState -> String
+showGmState state =
+  case length stack > 0 of
+    True ->
+      printf "stats: %s\noutput: %s\ncode: %s\nstack: %s\nvstack: %s\ntopnode:%s"
+      (show stats)
+      (show output)
+      (show code)
+      (show stack)
+      (show vstack)
+      (makeStr heap topNode)::String
+      where
+        topNode = (hLookup heap topAddr)
+        topAddr = head stack
+    False ->
+      printf "stats: %s\noutput: %s\ncode: %s\nstack: %s\nvstack: %s"
+      (show stats)
+      (show output)
+      (show code)
+      (show stack)
+      (show vstack)
+  where
+    code = gmcode state
+    stack = gmstack state
+    heap = gmheap state
+    vstack = gmvstack state
+    stats = gmstats state
+    output = gmoutput state
+
 

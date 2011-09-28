@@ -131,8 +131,8 @@ genProgramLLVMIR templates program@(adts, scs) =
     setManyAttrib [("scs", renderTemplates scsTemplates), ("constrFuns", renderTemplates constrs')] template
     where
         state = compile program
-        globals = getGlobals state
-        heap = getHeap state
+        globals = gmglobals state
+        heap = gmheap state
         Just template = getStringTemplate "program" templates
         mapping = createNameArityCodeMapping heap globals
         scsTemplates = genScsLLVMIR mapping templates globals

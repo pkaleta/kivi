@@ -77,8 +77,8 @@ getCompiledCode program@(adts, scs) =
     foldl stringify "" compiled
     where
         state = compile program
-        globals = getGlobals state
-        heap = getHeap state
+        globals = gmglobals state
+        heap = gmheap state
         compiled = foldl getCode [] globals
 
         stringify acc (name, expr, code) =
@@ -95,7 +95,14 @@ getCompiledCode program@(adts, scs) =
 
 
 compile :: CoreProgram -> GmState
-compile (dts, scs) = ([], initialCode, [], [], [], heap, globals, initialStats)
+compile (dts, scs) = GmState { gmoutput = [],
+                               gmcode = initialCode,
+                               gmstack = [],
+                               gmdump = [],
+                               gmvstack = [],
+                               gmheap = heap,
+                               gmglobals = globals,
+                               gmstats = initialStats }
     where
         (heap, globals) = buildInitialHeap scs
 
