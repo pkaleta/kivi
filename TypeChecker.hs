@@ -101,7 +101,7 @@ list t = TypeOp "list" [t]
 
 updateInstances :: State -> [TypedScDefn Name] -> [TypedScDefn Name]
 updateInstances state scs =
-    trace ("************" ++ show state ++ "\n\n") $ [TypedScDefn name (updateArgs state args) $ updateExpr state expr | (TypedScDefn name args expr) <- scs]
+     [TypedScDefn name (updateArgs state args) $ updateExpr state expr | (TypedScDefn name args expr) <- scs]
 
 
 updateArgs :: State -> [TypedExpr Name] -> [TypedExpr Name]
@@ -173,7 +173,7 @@ typeCheckSc nonGeneric (state, env) (ScDefn name args expr) =
     -- unify type for supercombinator
     argTypeVars = map fst args'
     scType = foldr arrow te argTypeVars
-    (state3, _, _) = trace ("unify supercombinator" ++ name) $ unify state2 tv scType
+    (state3, _, _) = unify state2 tv scType
 
 
 createTypeVar :: (State, TypeEnv) -> Name -> ((State, TypeEnv), TypedExpr Name)
@@ -185,7 +185,7 @@ createTypeVar (state, env) name = ((state', env'), (tv, TVar name))
 
 typeCheckExpr :: State -> TypeEnv -> NonGeneric -> CoreExpr -> (State, TypedExpr Name)
 typeCheckExpr state env nonGeneric (EVar v) = (state', (typeExpr, TVar v))
-    where (state', typeExpr) = trace ("############ " ++ v ++ " " ++ " " ++ show env ++ " ********* " ++ show state) getType state env nonGeneric v
+    where (state', typeExpr) = getType state env nonGeneric v
 typeCheckExpr state env nonGeneric (ENum n) = (state, (int, TNum n))
 typeCheckExpr state env nonGeneric (EChar c) = (state, (char, TChar c))
 typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2'))
@@ -194,7 +194,7 @@ typeCheckExpr state env nonGeneric (EAp e1 e2) = (state4, (resType, TAp e1' e2')
         (state2, e2'@(argType, _)) = typeCheckExpr state1 env nonGeneric e2
         (state3, resType) = newTypeVariable state2
 
-        (state4, _, _) = trace ("unify application: " ++ show funType ++ " " ++ show e1 ++ "\n\n" ++ show argType ++ " " ++ show e2 ++ "\n\n") $ unify state3 (argType `arrow` resType) funType
+        (state4, _, _) = unify state3 (argType `arrow` resType) funType
 typeCheckExpr state env nonGeneric expr@(ELet False defns body) =
     typeCheckLet state env nonGeneric defns body
 typeCheckExpr state env nonGeneric expr@(ELet True defns body) =
@@ -274,7 +274,7 @@ typeCheckRecDefn nonGeneric (state, env) (v, defn) = ((state2, env), (v, typedDe
        (state1, typedDefn@(defnType, defn')) = typeCheckExpr state env nonGeneric defn
 
        (Just varType) = Map.lookup v env
-       (state2, _, _) = trace "unify recursive defn" unify state1 varType defnType
+       (state2, _, _) = unify state1 varType defnType
 
 
 typeCheckAlt :: NonGeneric -> TypeEnv -> (State, TypeExpr) -> CoreAlt -> ((State, TypeExpr), TypedAlt Name)
@@ -282,16 +282,15 @@ typeCheckAlt nonGeneric env (state, accType) (v, expr) =
   ((state2, accType), (v, typedAlt))
   where
     (state1, typedAlt@(altType, expr')) = typeCheckExpr state env nonGeneric expr
-    (state2, _, _) = trace "unify alt" unify state1 accType altType
+    (state2, _, _) = unify state1 accType altType
 
 
 getType :: State -> TypeEnv -> NonGeneric -> Name -> (State, TypeExpr)
 getType state env nonGeneric v =
   case Map.lookup v env of
-    (Just te) -> trace ("####################### " ++ show v ++ " " ++ show te ++ " " ++ show te' ++ " ----" ++ show state ++ "\n\n") $ (state', te)
+    (Just te) -> (state', te)
       where
         (state', te') = fresh state nonGeneric te
---        (state1, _, _) = trace "unify gettype" unify state' te te'
     Nothing ->
       error $ "Undefined symbol: " ++ v
 
@@ -349,7 +348,7 @@ prune state te = (state, te)
 
 
 unify :: State -> TypeExpr -> TypeExpr -> (State, TypeExpr, TypeExpr)
-unify state te1 te2 = trace ("unify: " ++ show te1' ++ " " ++ show te2') $ unify' state2 te1' te2'
+unify state te1 te2 = unify' state2 te1' te2'
     where
         (state1, te1') = prune state te1
         (state2, te2') = prune state1 te2
@@ -359,14 +358,14 @@ unify' :: State -> TypeExpr -> TypeExpr -> (State, TypeExpr, TypeExpr)
 unify' state tv@(TypeVar name Nothing) te =
     case occurs of
         True -> error "Recursive unification"
-        False -> trace ("******** " ++ name ++ " " ++ show state2 ++ "\n") (state2, tv, te)
+        False -> (state2, tv, te)
             where
                 state2 = state1 { typeInstanceEnv = Map.insert name te $ typeInstanceEnv state1 }
     where
         (state1, occurs) = occursInType state tv te
 unify' state to@(TypeOp ton args) tv@(TypeVar name Nothing) = unify' state tv to
 unify' state to1@(TypeOp n1 as1) to2@(TypeOp n2 as2) =
-    trace ("jestem " ++ show n1 ++ " " ++ show n2) $ case n1 /= n2 || length as1 /= length as2 of
+    case n1 /= n2 || length as1 /= length as2 of
         True ->
             error $ "Type mismatch: " ++ showTypeExprDbg state to1 ++ " and " ++ showTypeExprDbg state to2
         False ->
