@@ -16,7 +16,7 @@ type GmEnvironment = Assoc Name Int
 
 
 binaryOperators :: [String]
-binaryOperators = ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "++"]
+binaryOperators = ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
 
 
 unaryOperators :: [String]
